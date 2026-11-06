@@ -65,10 +65,20 @@ final class DemoAssets implements AutoCloseable {
 
     /** Assets of their own, for a program without an engine: the GPU side on {@code device}. */
     static DemoAssets standalone(VulkanDevice device, FrameSlots slots, EngineSettings settings) {
+        return standalone(device, slots, settings, GeometryPool.Capacity.of(1 << 21, 1 << 16, 1 << 12), 4096);
+    }
+
+    /**
+     * {@link #standalone(VulkanDevice, FrameSlots, EngineSettings)} with a geometry pool of {@code geometry} and a
+     * material table of {@code materialCount}, for a program that sizes them by its content (as the engine's
+     * {@link Assets#geometry} and {@link Assets#materials} do).
+     */
+    static DemoAssets standalone(VulkanDevice device, FrameSlots slots, EngineSettings settings,
+        GeometryPool.Capacity geometry, int materialCount) {
         TaskScheduler tasks = new TaskScheduler();
         AssetCache cache = new AssetCache(tasks);
-        GeometryPool pool = new GeometryPool(device, GeometryPool.Capacity.of(1 << 21, 1 << 16, 1 << 12), slots);
-        Materials materials = new Materials(device, 4096, slots);
+        GeometryPool pool = new GeometryPool(device, geometry, slots);
+        Materials materials = new Materials(device, materialCount, slots);
         Textures textures = new Textures(device, slots);
         SceneResources resources = new SceneResources(cache, pool, materials, textures).settings(settings);
         return new DemoAssets(cache, new PathAssets(cache), resources, tasks, true, settings);

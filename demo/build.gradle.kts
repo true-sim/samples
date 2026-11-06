@@ -73,7 +73,10 @@ tasks.register<JavaExec>("stereoBench") {
 
 // Hitches while content streams (StreamBench): ./gradlew :samples-demo:streamBench
 // [--args=window]: the same fly-over in a window with the profiler (F3, Shift+F3), until closed or -Pseconds=n
+// [--args=baseline]: the hand-written path the scene way replaced, as the comparison (with window too: "window baseline")
 // -Prange=n: cells in range each way (default 3, the window 10); -Pspeed=n: metres a second (10, the window 60)
+// -Pframes=n: frames headless (2700); -Pmemory=n: a memory line every n frames. Each is a setting (demo.range, ...),
+// passed as --set demo.range=n after the --args.
 tasks.register<JavaExec>("streamBench") {
     group = "application"
     description = "Streams cells of meshes, textures and materials while frames run, and reports frame times."
@@ -81,11 +84,11 @@ tasks.register<JavaExec>("streamBench") {
     mainClass = "com.truesim.samples.demo.StreamBench"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-Xmx4g")
     providers.gradleProperty("jfr").orNull?.let { jvmArgs("-XX:StartFlightRecording=filename=$it,settings=profile") }
-    providers.gradleProperty("seconds").orNull?.let { systemProperty("truesim.demo.seconds", it) }
-    providers.gradleProperty("range").orNull?.let { systemProperty("truesim.demo.range", it) } // cells each way
-    providers.gradleProperty("speed").orNull?.let { systemProperty("truesim.demo.speed", it) } // metres a second
-    providers.gradleProperty("frames").orNull?.let { systemProperty("truesim.demo.frames", it) } // headless: 2700
-    providers.gradleProperty("memory").orNull?.let { systemProperty("truesim.demo.memory", it) } // every n frames
+    // providers, not args: --args replaces the task's args, and these come on top of it
+    val settings = listOf("seconds", "range", "speed", "frames", "memory").flatMap { name ->
+        providers.gradleProperty(name).orNull?.let { listOf("--set", "demo.$name=$it") } ?: listOf()
+    }
+    argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
 // The effects showcase (Showcase): ./gradlew :samples-demo:showcase -Pcrowd=<path to Fox.gltf> [--args=measure]

@@ -3,7 +3,6 @@ package com.truesim.samples.demo;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D32_SFLOAT;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_R16G16B16A16_SFLOAT;
 
-import com.truesim.common.math.color.Color;
 import com.truesim.engine.app.AppConfig;
 import com.truesim.engine.app.Application;
 import com.truesim.engine.app.Engine;
@@ -23,24 +22,9 @@ import com.truesim.engine.platform.Desktop;
 import com.truesim.engine.platform.PlatformListener;
 import com.truesim.engine.platform.Window;
 import com.truesim.engine.platform.WindowOptions;
-import com.truesim.engine.render.Camera;
-import com.truesim.engine.render.ClusteredForwardShading;
-import com.truesim.engine.render.ClusteredLights;
 import com.truesim.engine.render.DisplayTransform;
-import com.truesim.engine.render.GeometryPool;
-import com.truesim.engine.render.GpuScene;
 import com.truesim.engine.render.Keys;
-import com.truesim.engine.render.Lights;
-import com.truesim.engine.render.Material;
-import com.truesim.engine.render.Materials;
-import com.truesim.engine.render.MeshletRenderer;
-import com.truesim.engine.render.RayTracing;
-import com.truesim.engine.render.SceneGeometry;
-import com.truesim.engine.render.SceneView;
-import com.truesim.engine.render.Textures;
-import com.truesim.engine.render.ViewOptions;
-import com.truesim.engine.render.materials.MetallicRoughnessParameters;
-import com.truesim.engine.render.shadows.Shadows;
+import com.truesim.engine.scene.Assets;
 import com.truesim.engine.ui.UiPlugin;
 import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.ui.controls.Ui;
@@ -54,27 +38,28 @@ import com.truesim.ui.text.AtlasSettings;
 import com.truesim.ui.text.GlyphAtlas;
 import com.truesim.ui.text.TextSystem;
 import com.truesim.ui.text.natives.NativeTextBackend;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The stream benchmark's fly-over in a window, to watch: the same cells, content and camera path as
- * {@link StreamBench}'s headless run, presented in a resizable window and paced by the display (the presenter), with
- * the profiler's frame graph overlay (F3, on at start) and detailed view (Shift+F3), and a line at the bottom left:
- * cells in range, meshes and textures added and removed in the last second. Runs until the window is closed, or for
- * {@code -Pseconds=n}. {@code ./gradlew :engine-demo:streamBench --args=window} (with rays, large, heavy, direct,
- * inframe or grow as the benchmark takes them).
+ * {@link StreamBench}'s headless run ({@link StreamFlight}: the scene way on the engine's {@link Assets}, or the
+ * {@code baseline}), presented in a resizable window and paced by the display (the presenter), with the profiler's
+ * frame graph overlay (F3, on at start) and detailed view (Shift+F3), and a line at the bottom left: cells in range,
+ * meshes and textures added and removed in the last second. Runs until the window is closed, or for
+ * {@code demo.seconds} ({@code -Pseconds=n}). {@code ./gradlew :samples-demo:streamBench --args=window} (with
+ * baseline, rays, large, heavy, direct, inframe, streamed or grow as the benchmark takes them).
  *
- * <p>Speed ({@code -Pspeed=n} metres a second, 60 by default against the benchmark's 10) changes live with + and -
- * (the keypad's too), and Space pauses: the {@code stream} actions ({@link StreamActions}), rebindable as any. The
- * camera follows real time ({@code x} advances by the speed times the frame's real delta, as the benchmark's
- * {@code frame * speed / 90} does at 90 Hz). Per frame it allocates nothing: the cells are an indexed list searched by key, the range is arithmetic, and
- * the line is rewritten in place once a second; cells coming into range allocate their content, as they do headless.
+ * <p>Speed ({@code demo.speed}, {@code -Pspeed=n} metres a second, 60 by default against the benchmark's 10) changes
+ * live with + and - (the keypad's too), and Space pauses: the {@code stream} actions ({@link StreamActions}),
+ * rebindable as any. The camera follows real time ({@code x} advances by the speed times the frame's real delta, as
+ * the benchmark's {@code frame * speed / 90} does at 90 Hz). Per frame it allocates nothing: the flight's step does
+ * not, and the line is rewritten in place once a second; cells coming into range allocate their content, as they do
+ * headless.
+ *
+ * <p>Still outside the engine's way, for want of the parts: the HUD's fonts and theme come from the classpath
+ * ({@link BundledFonts}, {@link Tss#defaultTheme()}) rather than as assets, there being no font or style sheet asset
+ * types yet.
  */
 final class StreamWindow implements Application, PlatformListener {
 
@@ -87,7 +72,7 @@ final class StreamWindow implements Application, PlatformListener {
           background: box(rgba(#0d1117, 0.78)); }
         """;
 
-    private final double seconds; // 0: until the window is closed
+    private double seconds; // demo.seconds; 0: until the window is closed
     private final Stream stream = new Stream();
     private Engine engine;
     private Ui ui;
@@ -104,20 +89,21 @@ final class StreamWindow implements Application, PlatformListener {
     private int texturesAdded;
     private int texturesRemoved;
 
-    private StreamWindow(double seconds) {
-        this.seconds = seconds;
+    private StreamWindow() {
     }
 
     static void run(String[] args) {
-        double seconds = Double.parseDouble(System.getProperty("truesim.demo.seconds", "0"));
-        TrueSim.run(new StreamWindow(seconds), args);
+        TrueSim.run(new StreamWindow(), args);
     }
 
     @Override
     public void configure(AppConfig app) {
         app.id("truesim-stream").name("true-sim stream")
-            .use(new Desktop(), new Input().add(StreamActions.STREAM), new Rendering(), new Profiling(), stream,
-                new UiPlugin(StreamWindow::ui).view("main"));
+            .use(new Desktop(), new Input().add(StreamActions.STREAM), new Rendering(), new Profiling());
+        if (StreamBench.mode == StreamBench.Mode.SCENE) { // the one asset manager, sized for the cells in range
+            app.use(new Assets().geometry(StreamBench.capacity()).materials(StreamBench.materialCapacity()));
+        }
+        app.use(stream, new UiPlugin(StreamWindow::ui).view("main"));
     }
 
     /** The UI: the default theme with the line's style, the bundled fonts. */
@@ -136,6 +122,7 @@ final class StreamWindow implements Application, PlatformListener {
     @Override
     public void start(Engine started) {
         engine = started;
+        seconds = engine.settings().get(DemoSettings.SECONDS);
         engine.get(Desktop.KEY).listen(this);
         player = engine.get(Input.KEY).player(0);
         UiPlugin uiPlugin = engine.get(UiPlugin.KEY);
@@ -198,10 +185,10 @@ final class StreamWindow implements Application, PlatformListener {
     private void hud() {
         text.setLength(0);
         text.append("cells in range ").append(stream.inRange).append(" (").append(stream.placed)
-            .append(" placed, ").append(stream.cells.size() - stream.placed).append(" building)   last second: meshes +")
+            .append(" placed, ").append(stream.cellCount() - stream.placed).append(" coming)   last second: meshes +")
             .append(meshesAdded).append(" -").append(meshesRemoved).append(", textures +").append(texturesAdded)
-            .append(" -").append(texturesRemoved).append("   on the GPU: ").append(stream.pool.meshCount())
-            .append(" meshes, ").append(stream.textures.count()).append(" textures   x ")
+            .append(" -").append(texturesRemoved).append("   on the GPU: ").append(stream.meshCount())
+            .append(" meshes, ").append(stream.textureCount()).append(" textures   x ")
             .append((int) stream.x).append(" m   speed ").append(Math.round(speed)).append(" m/s");
         if (paused) {
             text.append(" (paused)");
@@ -216,30 +203,14 @@ final class StreamWindow implements Application, PlatformListener {
 
     /**
      * The streamed world on the engine's device and graph: the window and its view (made in {@link Stage#GRAPH}, so
-     * the UI finds the window's view), the cells, and their streaming each frame.
+     * the UI finds the window's view), the flight ({@link StreamFlight}: the scene way on the engine's assets, or the
+     * baseline), and its streaming each frame.
      */
     private static final class Stream implements Plugin {
         static final PluginKey<Stream> KEY = PluginKey.of("demo.stream", Stream.class);
 
-        // more builders than the benchmark's 3: fast flights over wide ranges ask for hundreds of cells a second
-        private final ExecutorService builders = Executors.newFixedThreadPool(
-            Math.max(3, Runtime.getRuntime().availableProcessors() / 2));
-        private final ArrayList<StreamBench.Cell> cells = new ArrayList<>();
-        private final ArrayDeque<Integer> freeIds = new ArrayDeque<>();
-        private final int[] added = new int[1];
-        private final Camera camera = new Camera();
-        private VulkanDevice device;
-        private GeometryPool pool;
-        private Materials materials;
-        private Textures textures;
-        private GpuScene scene;
-        private Lights lights;
-        private MeshletRenderer renderer;
-        private Shadows sun; // the sun's cascades
-        private RayTracing rayTracing;
+        private StreamFlight flight;
         private Window window;
-        private long seed = 1;
-        private long frames;
         double x;
         int inRange;
         int placed;
@@ -255,47 +226,28 @@ final class StreamWindow implements Application, PlatformListener {
 
         @Override
         public List<PluginKey<?>> requires() {
-            return List.of(Rendering.KEY, Desktop.KEY);
+            return StreamBench.mode == StreamBench.Mode.SCENE ? List.of(Rendering.KEY, Desktop.KEY, Assets.KEY)
+                : List.of(Rendering.KEY, Desktop.KEY);
         }
 
         @Override
         public void start(Stage stage, Startup startup) {
+            if (stage == Stage.BEFORE_INSTANCE) {
+                DemoSettings.register(startup.registry()); // the console and the command line reach them
+            }
             if (stage != Stage.GRAPH) {
                 return;
             }
             Rendering rendering = startup.get(Rendering.KEY);
-            device = rendering.device();
+            VulkanDevice device = rendering.device();
             FrameGraph graph = rendering.graph();
-            var slots = graph.frameSlots();
-            pool = new GeometryPool(device, StreamBench.capacity(), slots);
-            materials = new Materials(device, StreamBench.materialCapacity(), slots);
-            textures = new Textures(device, slots);
-            scene = new GpuScene(device, pool, StreamBench.instanceCapacity(), slots);
-            lights = new Lights(device, 4, 8, slots);
-            scene.setMaterials(materials);
-            if (StreamBench.inFrame) {
-                pool.streamBudget(0);
-            }
-            StreamBench.sharedPool = pool;
-            StreamBench.sharedTextures = textures;
-            rayTracing = StreamBench.rays && device.rayTracing() ? new RayTracing(device, pool, 512) : null;
-            StreamBench.rayTracing = rayTracing;
-            renderer = new MeshletRenderer(device, scene, COLOR, DEPTH, slots);
-            SceneGeometry geometry = SceneGeometry.meshlets(renderer);
-            StreamBench.groundMaterial = materials.add(new Material(MetallicRoughnessParameters.DEFAULTS
-                .withBaseColor(new Color(0.3f, 0.45f, 0.25f, 1))));
-            lights.directional(0, -0.4f, -0.8f, -0.45f, 2.5f, 2.3f, 2.0f);
-            lights.setCount(1);
+            // more threads than the benchmark's 3: fast flights over wide ranges ask for hundreds of cells a second
+            int threads = Math.max(3, Runtime.getRuntime().availableProcessors() / 2);
+            Assets assets = StreamBench.mode == StreamBench.Mode.SCENE ? startup.get(Assets.KEY) : null;
+            flight = new StreamFlight(device, graph.frameSlots(), startup.settings(), assets,
+                startup.engine().tasks(), threads);
             ViewPort port = graph.addView("main");
-            SceneView view = geometry.createView(port, camera, ViewOptions.of(1 << 14, 1 << 22).withOcclusion(true))
-                .set(1, MeshletRenderer.MODE_LIT);
-            sun = new Shadows(geometry, lights);
-            lights.shadow(0, com.truesim.scene.core.ShadowSpec.cascades(3, 2048, 120));
-            port.add(new ClusteredForwardShading(geometry, view, COLOR, DEPTH).clearColor(0.4f, 0.55f, 0.8f))
-                .add(new ClusteredLights(lights, view)).add(sun.view(view));
-            for (int id = StreamBench.instanceCapacity() - 1; id >= 1; id--) {
-                freeIds.push(id);
-            }
+            flight.draw(port, COLOR, DEPTH);
             window = startup.get(Desktop.KEY).platform().createWindow(
                 WindowOptions.of("stream test", 1600, 900), startup.settings().scoped("main"));
             rendering.presenter().outputTransform(new DisplayTransform()).present(port, Keys.SCENE_COLOR, window);
@@ -303,113 +255,34 @@ final class StreamWindow implements Application, PlatformListener {
 
         /** A frame at {@code at} metres into the flight: the camera and the cells streamed as headless. */
         void step(double at) {
-            x = at;
-            StreamBench.fly(camera, x, Math.max(1, window.pixelWidth()), Math.max(1, window.pixelHeight()));
-            added[0] = 0;
-            meshesRemoved = 0;
-            texturesAdded = 0;
-            texturesRemoved = 0;
-            int range = StreamBench.range;
-            int cx = (int) Math.floor(x / StreamBench.CELL);
-            for (int i = cx - range; i <= cx + range; i++) {
-                for (int j = -range; j <= range; j++) {
-                    long key = (long) i << 32 | (j & 0xffffffffL);
-                    if (find(key) < 0) {
-                        StreamBench.Cell cell = new StreamBench.Cell(key);
-                        long cellSeed = seed++;
-                        cell.building = CompletableFuture.supplyAsync(() -> cell.dropped ? null
-                            : StreamBench.buildMeshes(cellSeed, key), builders);
-                        cells.add(cell);
-                    }
-                }
-            }
-            for (int c = 0; c < cells.size(); c++) {
-                StreamBench.Cell cell = cells.get(c);
-                if (cell.building != null && cell.building.isDone()) {
-                    StreamBench.Built built = cell.building.join(); // null: left range before its build began
-                    if (built != null) {
-                        texturesAdded += StreamBench.place(cell, built, pool, textures, materials, scene, freeIds,
-                            added);
-                        cell.freeAt = frames + StreamBench.FREE_AFTER;
-                    }
-                    cell.building = null;
-                }
-                StreamBench.freePlaced(cell, frames);
-            }
-            inRange = 0;
-            placed = 0;
-            for (int c = cells.size() - 1; c >= 0; c--) {
-                StreamBench.Cell cell = cells.get(c);
-                boolean wanted = Math.abs((int) (cell.key >> 32) - cx) <= range && Math.abs((int) cell.key) <= range;
-                if (!wanted && cell.building != null) {
-                    cell.dropped = true; // a build not begun yet is skipped (the flight outran the builders)
-                }
-                if (!wanted && cell.building == null) {
-                    texturesRemoved += cell.texture >= 0 ? 1 : 0;
-                    meshesRemoved += StreamBench.clear(cell, pool, textures, materials, scene, freeIds);
-                    cells.set(c, cells.get(cells.size() - 1));
-                    cells.remove(cells.size() - 1);
-                } else {
-                    inRange += wanted ? 1 : 0;
-                    placed += cell.building == null ? 1 : 0;
-                }
-            }
-            meshesAdded = added[0];
-            frames++;
+            flight.step(at, false, Math.max(1, window.pixelWidth()), Math.max(1, window.pixelHeight()));
+            x = flight.x;
+            inRange = flight.inRange;
+            placed = flight.placed;
+            meshesAdded = flight.meshesAdded;
+            meshesRemoved = flight.meshesRemoved;
+            texturesAdded = flight.texturesAdded;
+            texturesRemoved = flight.texturesRemoved;
         }
 
-        private int find(long key) {
-            for (int c = 0; c < cells.size(); c++) {
-                if (cells.get(c).key == key) {
-                    return c;
-                }
-            }
-            return -1;
+        int cellCount() {
+            return flight.cellCount();
+        }
+
+        int meshCount() {
+            return flight.pool().meshCount();
+        }
+
+        int textureCount() {
+            return flight.textures().count();
         }
 
         @Override
         public void stop() {
-            for (int c = 0; c < cells.size(); c++) {
-                cells.get(c).dropped = true; // builds queued are skipped
+            if (flight != null) {
+                flight.close();
+                flight = null;
             }
-            builders.shutdown(); // the builds started finish (they prepare into the pool), then the pool closes
-            try {
-                builders.awaitTermination(60, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            if (device == null) {
-                return;
-            }
-            device.waitIdle();
-            for (int c = 0; c < cells.size(); c++) {
-                StreamBench.Cell cell = cells.get(c);
-                if (cell.building == null) {
-                    StreamBench.clear(cell, pool, textures, materials, scene, freeIds);
-                } else if (cell.building.isDone() && !cell.building.isCompletedExceptionally()) {
-                    StreamBench.Built unplaced = cell.building.join(); // built but never placed: its prepared content
-                    if (unplaced != null) {
-                        if (!StreamBench.direct) {
-                            unplaced.preparedMeshes().forEach(GeometryPool.Prepared::close);
-                            unplaced.preparedTexture().close();
-                        }
-                        unplaced.free();
-                    }
-                }
-            }
-            device.waitIdle();
-            if (sun != null) {
-                sun.close();
-            }
-            renderer.close();
-            if (rayTracing != null) {
-                rayTracing.close();
-            }
-            lights.close();
-            scene.close();
-            textures.close();
-            materials.close();
-            pool.close();
         }
     }
 }

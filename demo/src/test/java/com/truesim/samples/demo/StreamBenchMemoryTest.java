@@ -7,29 +7,37 @@ import com.truesim.engine.vulkan.GpuMemory;
 import com.truesim.engine.vulkan.VulkanException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The stream benchmark's cells streamed in and out many times over keep memory on a plateau: every cell's CPU-side
- * content (its meshes' shared arenas and its texels) is freed after placing, and native memory outside the Java heap
- * and the GPU's stop growing once the range is full. Before the fix, each cell left about 220 KB of meshes' arenas
- * behind (6 GB over five minutes of a fast flight).
+ * The stream benchmark's cells streamed in and out many times over keep memory on a plateau, the scene way and the
+ * baseline alike: every cell's CPU-side content (its meshes' shared arenas and its texels) is freed (the baseline's
+ * after placing; the scene way's when the cell leaves and the asset cache lets go of it), and native memory outside
+ * the Java heap and the GPU's stop growing once the range is full. Before the fix, each cell left about 220 KB of
+ * meshes' arenas behind (6 GB over five minutes of a fast flight).
  */
 class StreamBenchMemoryTest {
 
     @AfterEach
     void restore() {
-        StreamBench.options(List.of());
-        StreamBench.frameCount = 2700;
+        StreamBench.options();
         StreamBench.paced = true;
         StreamBench.builderThreads = 3;
     }
 
     @Test
     void cellsStreamedInAndOutFreeTheirContentAndMemoryStaysFlat() throws Exception {
-        StreamBench.options(List.of());
+        streamInAndOut();
+    }
+
+    @Test
+    void theBaselinesCellsFreeTheirContentAndMemoryStaysFlat() throws Exception {
+        streamInAndOut("baseline");
+    }
+
+    private static void streamInAndOut(String... args) throws Exception {
+        StreamBench.options(args);
         StreamBench.speed = 270; // 3 m a frame: a column of 7 cells every 8 frames
         int frames = 1600; // about 1,400 cells in and out, each frame waiting for its cells' builds
         StreamBench.frameCount = frames;
@@ -42,7 +50,7 @@ class StreamBenchMemoryTest {
             (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
         int before = StreamBench.UNFREED.get();
         try {
-            StreamBench.headless((f, cells, pool, textures, materials) -> {
+            StreamBench.headless((f, flight) -> {
                 if (f % 100 == 0) {
                     outside[f] = os.getCommittedVirtualMemorySize() - jvm.getHeapMemoryUsage().getCommitted()
                         - jvm.getNonHeapMemoryUsage().getCommitted();
