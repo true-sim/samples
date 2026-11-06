@@ -404,6 +404,9 @@ final class StreamFlight implements AutoCloseable {
     /** The scene way: cells as nodes, their content assets the cache loads and the resources upload. */
     private void stepScene(int cx, int range, boolean waitForBuilds) {
         long since = System.nanoTime();
+        if (ownAssets) {
+            resources.beginFrame(); // the frame's streaming budget runs from here (the engine's assets plugin marks it)
+        }
         assets.drain(); // loads and preparing done: uploaded (standalone; the engine drains its own at the frame start)
         spent(takeMillis, since);
         int arrivedTextures = textures.count();
@@ -457,6 +460,7 @@ final class StreamFlight implements AutoCloseable {
             while (resources.loadingCount() > 0 || resources.preparingCount() > 0) {
                 LockSupport.parkNanos(100_000);
                 assets.drain();
+                resources.flush(); // arrivals the frame budget left waiting placed too: else they never are
             }
             sync.update(); // what arrived drawn this frame
         }
@@ -809,6 +813,51 @@ final class StreamFlight implements AutoCloseable {
     /** The asset cache's bytes of loaded assets (the scene way), or 0. */
     long cachedBytes() {
         return assets == null ? 0 : assets.cache().residentBytes();
+    }
+
+    /**
+     * What every growable structure on the streaming path holds or has room for now, by name: the pool's room and
+     * meshes, the GPU scene's table, materials, textures, the resources' tables and queues, the cache's assets and
+     * bytes, the mesh memory kept, the scene's slots and components, the sync's items, GPU memory by category. A flight
+     * streaming as long as it likes keeps each on a plateau (the stream soak tests).
+     */
+    java.util.Map<String, Long> footprint() {
+        java.util.Map<String, Long> f = new java.util.LinkedHashMap<>();
+        GeometryPool.Capacity room = pool.capacity();
+        f.put("pool vertices room", (long) room.vertices());
+        f.put("pool meshlets room", (long) room.meshlets());
+        f.put("pool meshes room", (long) room.meshes());
+        f.put("pool mesh numbers", (long) pool.meshSlots());
+        f.put("pool meshes", (long) pool.meshCount());
+        f.put("pool vertices", (long) pool.vertexCount());
+        f.put("pool spares", (long) pool.spareCount());
+        f.put("instances room", (long) gpu.capacity());
+        f.put("instances high water", (long) gpu.highWater());
+        f.put("instances", (long) gpu.count());
+        f.put("materials", (long) materials.count());
+        f.put("textures", (long) textures.count());
+        f.put("scene slots", (long) scene.slotCount());
+        f.put("scene nodes", (long) scene.size());
+        f.put("renderables", (long) renderables.size());
+        f.put("cells", (long) cells.size());
+        if (mode == StreamBench.Mode.SCENE) {
+            f.put("resources meshes", (long) resources.meshCount());
+            f.put("resources material blocks", (long) resources.materialSetCount());
+            f.put("resources materials", (long) resources.materialCount());
+            f.put("resources textures", (long) resources.textureCount());
+            f.put("releases waiting", (long) resources.releasesWaiting());
+            f.put("arrivals waiting", (long) resources.arrivalsWaiting());
+            f.put("cache assets", (long) assets.cache().size());
+            f.put("cache resident bytes", assets.cache().residentBytes());
+            f.put("mesh memory kept", (long) meshPool.size());
+            f.put("sync items", (long) sync.renderableCount());
+            f.put("sync meshes", (long) sync.meshCount());
+            f.put("batches", (long) BATCHES.size());
+        }
+        for (com.truesim.engine.vulkan.GpuMemory.Category c : com.truesim.engine.vulkan.GpuMemory.Category.values()) {
+            f.put("GPU " + c.name().toLowerCase(java.util.Locale.ROOT), com.truesim.engine.vulkan.GpuMemory.bytes(c));
+        }
+        return f;
     }
 
     /**
