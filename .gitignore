@@ -1,0 +1,11 @@
+.gradle/
+/build/
+/*/build/
+.kotlin/
+.idea/
+*.iml
+out/
+.DS_Store
+
+# JVM crash logs
+hs_err_pid*.log
