@@ -141,6 +141,11 @@ final class StreamFlight implements AutoCloseable {
         final long key;
         final long seed;
         long[] nodes; // the scene way's: the ground tile's last (small cells), rock i of mesh i % MESHES_PER_CELL
+        // the scene way's placements (x, y, z, scale per rock), worked out on a builder thread; then the refs its
+        // nodes take, kept until they are made
+        CompletableFuture<double[]> placing;
+        List<AssetRef<MeshData>> sceneMeshes;
+        List<List<AssetRef<MaterialData>>> sceneMaterials;
         // the baseline's
         CompletableFuture<Built> building;
         int[] meshes = new int[0];
@@ -279,7 +284,7 @@ final class StreamFlight implements AutoCloseable {
             sync = new SceneSync(resources, scene, gpu);
             rayTracing = StreamBench.rays && device.rayTracing() ? new RayTracing(device, pool, 512) : null;
             resources.rayTracing(rayTracing);
-            builders = null;
+            builders = Executors.newFixedThreadPool(threads); // cells' placements worked out off the frame's thread
             groundMaterial = -1;
         } else {
             ownAssets = false;
@@ -396,12 +401,24 @@ final class StreamFlight implements AutoCloseable {
                 }
             }
         }
+        // Cells whose placements arrived get their nodes, within the frame's streaming budget (render.streamFrameBudget,
+        // at least one cell): a row of cells entering at once spreads over a few frames
+        long attachUntil = since + (long) (resources.settings().get(RenderSettings.STREAM_FRAME_BUDGET) * 1e6);
+        for (int c = 0; c < cells.size(); c++) {
+            Cell cell = cells.get(c);
+            if (cell.nodes == null && (waitForBuilds || cell.placing.isDone())) {
+                attach(cell);
+                if (!waitForBuilds && System.nanoTime() - attachUntil > 0) {
+                    break;
+                }
+            }
+        }
         inRange = 0;
         placed = 0;
         for (int c = cells.size() - 1; c >= 0; c--) {
             Cell cell = cells.get(c);
             if (!wanted(cell, cx, range)) {
-                for (long node : cell.nodes) {
+                for (long node : cell.nodes == null ? new long[0] : cell.nodes) {
                     scene.remove(node); // its renderable with it: what only it used leaves the GPU and the cache
                 }
                 cells.set(c, cells.get(cells.size() - 1));
@@ -434,7 +451,8 @@ final class StreamFlight implements AutoCloseable {
         meshesSeen = now;
         texturesSeen = textureCount;
         for (int c = 0; c < cells.size(); c++) {
-            placed += sync.slotOf(cells.get(c).nodes[0]) >= 0 ? 1 : 0;
+            long[] nodes = cells.get(c).nodes;
+            placed += nodes != null && sync.slotOf(nodes[0]) >= 0 ? 1 : 0;
         }
     }
 
@@ -463,31 +481,64 @@ final class StreamFlight implements AutoCloseable {
         List<List<AssetRef<MaterialData>>> rockMaterials = List.of(
             List.of(AssetRef.generated(RenderAssets.MATERIAL, PAINTED, new Painted(texture), cell.seed)),
             List.of(AssetRef.generated(RenderAssets.MATERIAL, PLAIN, STONE, cell.seed)));
-        cell.nodes = new long[INSTANCES_PER_CELL + (large ? 0 : 1)];
-        if (!large) { // the cell's ground tile, after the rocks
-            long ground = scene.create();
-            scene.setTranslation(ground, baseX, 0, baseZ);
-            renderables.set(ground, Renderable.of(meshes.get(MESHES_PER_CELL), GROUND));
-            cell.nodes[INSTANCES_PER_CELL] = ground;
-        }
+        cell.sceneMeshes = meshes;
+        cell.sceneMaterials = rockMaterials;
+        // Where its rocks go (the terrain's height is noise, costly): worked out on a builder thread; the nodes are
+        // made once it is done, in a later step (attach), so the frame's thread only makes nodes
+        cell.placing = CompletableFuture.supplyAsync(() -> placements(cell, baseX, baseZ, large), builders);
+        return cell;
+    }
+
+    /** The x, y, z and scale of each of {@code cell}'s rocks: off the frame's thread. */
+    private static double[] placements(Cell cell, double baseX, double baseZ, boolean large) {
+        double[] at = new double[4 * INSTANCES_PER_CELL];
         SplittableRandom random = new SplittableRandom(cell.key);
         for (int i = 0; i < INSTANCES_PER_CELL; i++) {
-            long node = scene.create();
-            cell.nodes[i] = node;
             double x = baseX + random.nextDouble(StreamBench.CELL);
             double z = baseZ + random.nextDouble(StreamBench.CELL);
             double s = 0.3 + random.nextDouble(1.5);
-            if (large && i == 0) { // the cell's terrain tile, textured, once
-                scene.setTranslation(node, baseX, 0, baseZ);
+            if (large && i == 0) { // the cell's terrain tile
+                at[4 * i] = baseX;
+                at[4 * i + 2] = baseZ;
+                at[4 * i + 3] = 1;
+                continue;
+            }
+            at[4 * i] = x;
+            at[4 * i + 1] = DemoMeshes.height(x, z) + s * 0.6;
+            at[4 * i + 2] = z;
+            at[4 * i + 3] = s;
+        }
+        return at;
+    }
+
+    /** Makes {@code cell}'s nodes from its placements: the ground tile (small cells) and the rocks with renderables. */
+    private void attach(Cell cell) {
+        double[] at = cell.placing.join();
+        boolean large = StreamBench.large;
+        List<AssetRef<MeshData>> meshes = cell.sceneMeshes;
+        List<List<AssetRef<MaterialData>>> rockMaterials = cell.sceneMaterials;
+        cell.nodes = new long[INSTANCES_PER_CELL + (large ? 0 : 1)];
+        if (!large) { // the cell's ground tile, after the rocks
+            long ground = scene.create();
+            scene.setTranslation(ground, baseX(cell.key), 0, baseZ(cell.key));
+            renderables.set(ground, Renderable.of(meshes.get(MESHES_PER_CELL), GROUND));
+            cell.nodes[INSTANCES_PER_CELL] = ground;
+        }
+        for (int i = 0; i < INSTANCES_PER_CELL; i++) {
+            long node = scene.create();
+            cell.nodes[i] = node;
+            scene.setTranslation(node, at[4 * i], at[4 * i + 1], at[4 * i + 2]);
+            if (large && i == 0) {
                 renderables.set(node, Renderable.of(meshes.get(0), rockMaterials.get(0)));
                 continue;
             }
-            scene.setTranslation(node, x, DemoMeshes.height(x, z) + s * 0.6, z);
+            double s = at[4 * i + 3];
             scene.setScale(node, s, s, s);
             renderables.set(node, Renderable.of(large ? meshes.get(1) : meshes.get(i % MESHES_PER_CELL),
                 rockMaterials.get(i % 2)));
         }
-        return cell;
+        cell.sceneMeshes = null;
+        cell.sceneMaterials = null;
     }
 
     /** The baseline: cells built on executor threads and put straight into the pool, textures and materials. */
