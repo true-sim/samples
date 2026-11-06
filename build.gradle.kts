@@ -1,6 +1,6 @@
 // The versions the samples build on: one engine and one ui release for every sample.
-val engineVersion by extra("0.187.0")
-val sceneVersion by extra("0.68.0")
+val engineVersion by extra("0.188.0")
+val sceneVersion by extra("0.70.0")
 val uiVersion by extra("0.10.0")
 val effectsParticlesVersion by extra("0.1.0")
 
