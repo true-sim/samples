@@ -436,7 +436,7 @@ final class DemoScene implements AutoCloseable {
     /** Places camera node {@code node} at ({@code x}, {@code y}, {@code z}) looking along (dx, dy, dz), level. */
     static void look(SceneGraph scene, long node, double x, double y, double z, double dx, double dy, double dz) {
         double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        place(scene, node, x, y, z, Math.atan2(dx, dz), Math.asin(dy / length));
+        place(scene, node, x, y, z, Maths.atan2(dx, dz), Maths.asin(dy / length));
     }
 
     /** A camera node of the world's scene with a perspective lens of {@code fovY} radians and {@code near} metres. */
