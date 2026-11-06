@@ -9,6 +9,9 @@ import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.Technique;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
+import com.truesim.scene.assets.AssetRef;
+import com.truesim.scene.render.MaterialData;
+import com.truesim.scene.render.RenderAssets;
 import com.truesim.engine.render.ClusteredForwardShading;
 import com.truesim.engine.render.ClusteredLights;
 import com.truesim.engine.render.Environment;
@@ -39,7 +42,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
  * Screenshots of screen-space reflections in the demo's scene: a mirror-like patch on the terrain among its rocks (some
  * glossy: the gold metal at roughness 0.3, the blue at 0.2), under a sky panorama, at 1920 x 1080, through the display
  * transform, for each technique and off, forward and visibility buffer. Run with {@code TRUESIM_SCREENSHOTS=true
- * TRUESIM_SSR_SHOTS=<directory> ./gradlew :engine-demo:test --tests '*ReflectionsScreenshots'}.
+ * TRUESIM_SSR_SHOTS=<directory> ./gradlew :samples-demo:test --tests '*ReflectionsScreenshots'}.
  */
 @EnabledIfEnvironmentVariable(named = "TRUESIM_SCREENSHOTS", matches = "true")
 class ReflectionsScreenshots {
@@ -83,7 +86,7 @@ class ReflectionsScreenshots {
                 .surfaces(false).build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), VK_FORMAT_R16G16B16A16_SFLOAT,
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), VK_FORMAT_R16G16B16A16_SFLOAT,
                  VK_FORMAT_D32_SFLOAT);
              Textures textures = new Textures(device, graph.frameSlots());
              Arena arena = Arena.ofConfined()) {
@@ -117,13 +120,12 @@ class ReflectionsScreenshots {
                     top = Math.max(top, DemoMeshes.height(bestX + dx, bestZ + dz));
                 }
             }
-            int mirror = world.materials().add(new Material(MetallicRoughnessParameters.DEFAULTS
-                .withBaseColor(new Color(0.95f, 0.95f, 0.97f, 1)).withMetallic(1).withRoughness(0.03f)));
+            AssetRef<MaterialData> mirror = AssetRef.generated(RenderAssets.MATERIAL, DemoScene.SURFACES,
+                new DemoScene.Surface(0.95f, 0.95f, 0.97f, 1, 1, 0.03f), 1);
             float y = (float) (top + 0.03);
             float half = (float) Math.sqrt(0.5);
             // The pane is a unit square facing +Z: turned to face up, 10 x 10 m
-            world.gpuScene().set(world.gpuScene().capacity() - 1, world.pane(), mirror, (float) bestX, y,
-                (float) bestZ, -half, 0, 0, half, 10, 10, 1);
+            world.prop(DemoScene.PANE, mirror, bestX, y, bestZ, -half, 0, 0, half, 10, 10, 1, false);
             // Glossy rocks on and around the patch
             world.extraRock(0, bestX - 1.5, y + 0.6, bestZ - 2.5, 1.2f);
             world.extraRock(1, bestX + 2.5, y + 0.4, bestZ - 1, 0.8f);

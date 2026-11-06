@@ -2,19 +2,17 @@ package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
 import com.truesim.common.state.ChangeClock;
-import com.truesim.engine.render.particles.ParticleSimulation;
-import com.truesim.engine.render.particles.Particles;
-import com.truesim.engine.scene.EffectBindings;
-import com.truesim.engine.scene.EffectSync;
+import com.truesim.effects.particles.ParticleSimulation;
+import com.truesim.effects.particles.Particles;
+import com.truesim.effects.particles.scene.EffectBindings;
+import com.truesim.effects.particles.scene.EffectSync;
 import com.truesim.engine.vulkan.FrameSlots;
 import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.scene.core.SceneGraph;
 import com.truesim.scene.effects.Bind;
 import com.truesim.scene.effects.Collide;
-import com.truesim.scene.effects.ParticleEvent;
-import com.truesim.scene.effects.ParticleWorld;
-import com.truesim.scene.effects.Effect;
 import com.truesim.scene.effects.ColorGradient;
+import com.truesim.scene.effects.Effect;
 import com.truesim.scene.effects.EffectData;
 import com.truesim.scene.effects.EffectParameter;
 import com.truesim.scene.effects.Effects;
@@ -22,6 +20,8 @@ import com.truesim.scene.effects.FloatCurve;
 import com.truesim.scene.effects.Forces;
 import com.truesim.scene.effects.Init;
 import com.truesim.scene.effects.Over;
+import com.truesim.scene.effects.ParticleEvent;
+import com.truesim.scene.effects.ParticleWorld;
 import com.truesim.scene.effects.Renderer;
 import com.truesim.scene.effects.Shape;
 import com.truesim.scene.effects.Space;
@@ -98,10 +98,9 @@ final class DemoEffects implements AutoCloseable {
             .render(Renderer.billboard(Renderer.Facing.AXIS).additive().set("soft", 0.05f)))
         .build();
 
-    /** The rock mesh and material debris draws: the world's own, registered as {@link #debris} says. */
-    static final com.truesim.scene.assets.AssetRef<?> ROCK = com.truesim.scene.assets.AssetRef.of(
-        com.truesim.scene.assets.AssetType.of("demo.mesh", String.class, s -> 0),
-        new com.truesim.scene.assets.AssetId(0, 1));
+    /** The rock mesh debris draws, and its material: the world's rock and its plain stone, assets like any. */
+    static final com.truesim.scene.assets.AssetRef<?> ROCK = DemoScene.ROCK;
+    static final com.truesim.scene.assets.AssetRef<?> ROCK_MATERIAL = DemoScene.STONE;
 
     /**
      * Debris: every four seconds a burst of rocks thrown up, tumbling as they fly and roll, bouncing on the terrain and
@@ -113,7 +112,7 @@ final class DemoEffects implements AutoCloseable {
                 Init.size(Bind.random(0.1f, 0.22f)))
             .update(Forces.gravity(), Forces.drag(0.1f))
             .collide(Collide.height().bounce(0.3f).friction(0.5f))
-            .render(Renderer.mesh(ROCK, ROCK).castsShadows(true)))
+            .render(Renderer.mesh(ROCK, ROCK_MATERIAL).castsShadows(true)))
         .emitter("dust", e -> e.duration(4).loops(0).capacity(40).spawn(Spawn.burst(0, 24))
             .init(Shape.sphere(0.5f), Init.speed(Bind.random(0.5f, 1.5f)), Init.lifetime(Bind.random(1.5f, 2.5f)),
                 Init.size(Bind.random(0.6f, 1.1f)), Init.color(Bind.color(0.45f, 0.38f, 0.3f, 0.5f)))
@@ -340,12 +339,20 @@ final class DemoEffects implements AutoCloseable {
     }
 
     /**
-     * Debris at ({@code dx}, {@code dz}) from the effects' place: rocks of the world's mesh {@code rock} with material
-     * {@code material}, mesh particles in {@code renderer}'s scene (a range of its ids the GPU writes).
+     * The content effects name (textures, the debris' rock and its material) comes through {@code resources}: the
+     * world's, whose pool and materials {@link #debris}' renderer draws from.
      */
-    void debris(com.truesim.engine.render.MeshletRenderer renderer, int rock, int material, double dx, double dz) {
+    DemoEffects assets(com.truesim.engine.scene.SceneResources resources) {
+        particles.assets(resources);
+        return this;
+    }
+
+    /**
+     * Debris at ({@code dx}, {@code dz}) from the effects' place: rocks of the world's rock mesh in its stone, mesh
+     * particles in {@code renderer}'s scene (a range of its ids the GPU writes), resolved through {@link #assets}.
+     */
+    void debris(com.truesim.engine.render.MeshletRenderer renderer, double dx, double dz) {
         particles.meshes(renderer, 1024);
-        particles.mesh(ROCK, rock, material);
         effects.play(DEBRIS, x + dx, DemoMeshes.height(x + dx, z + dz), z + dz);
     }
 

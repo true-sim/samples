@@ -1,12 +1,11 @@
 package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
-import com.truesim.engine.render.GpuScene;
-import com.truesim.engine.render.Textures;
-import com.truesim.engine.render.particles.ParticleSimulation;
-import com.truesim.engine.render.particles.Particles;
-import com.truesim.engine.scene.EffectBindings;
-import com.truesim.engine.scene.EffectSync;
+import com.truesim.effects.particles.ParticleSimulation;
+import com.truesim.effects.particles.Particles;
+import com.truesim.effects.particles.scene.EffectBindings;
+import com.truesim.effects.particles.scene.EffectSync;
+import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.vulkan.FrameSlots;
 import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.scene.core.SceneGraph;
@@ -15,10 +14,11 @@ import com.truesim.scene.effects.Collide;
 import com.truesim.scene.effects.ColorGradient;
 import com.truesim.scene.effects.Effect;
 import com.truesim.scene.effects.EffectData;
+import com.truesim.scene.effects.EffectEmitter;
 import com.truesim.scene.effects.EffectParameter;
 import com.truesim.scene.effects.EffectType;
-import com.truesim.scene.effects.EmitterData;
 import com.truesim.scene.effects.Effects;
+import com.truesim.scene.effects.EmitterData;
 import com.truesim.scene.effects.FloatCurve;
 import com.truesim.scene.effects.Forces;
 import com.truesim.scene.effects.Init;
@@ -59,7 +59,8 @@ final class ShowcaseEffects implements AutoCloseable {
 
     /**
      * With {@code -Pglass=true} the fires draw before glass (effects step 21): a window in front of the bonfire tints
-     * it; sparks in front of the window draw after it, untinted.
+     * it; sparks in front of the window draw after it, untinted. Still a system property, not a setting: the effects'
+     * definitions are constants that take it as they are made.
      */
     static final float GLASS = Boolean.getBoolean("truesim.demo.glass") ? 1 : 0;
     /**
@@ -188,17 +189,15 @@ final class ShowcaseEffects implements AutoCloseable {
     private final SceneGraph scene;
     private final Effects effects;
     private final Particles particles;
-    private final Textures textures;
     private final EffectSync sync;
     private final EffectBindings bindings;
-    private final GpuScene instances;
-    private final int rock;
-    private final int wood;
+    private final SceneGraph worldScene; // the world's scene: the props (logs, stones, poles, panes) are its nodes
+    private final boolean async;
     private final double x;
     private final double z;
     private final double radius;
     private final long[] torches = new long[TORCHES];
-    private final int[] poles = new int[2 * TORCHES]; // instance ids: each torch's pole and head
+    private final long[] poles = new long[2 * TORCHES]; // the world's nodes: each torch's pole and head
     private final long[] orbs = new long[ORBS];
     private final double[] launchers = new double[3 * LAUNCHERS]; // x, y, z
     private final int[] fireFoxes;
@@ -211,21 +210,19 @@ final class ShowcaseEffects implements AutoCloseable {
      * its crowd's scene (which its owner updates before {@link #update}): mesh particles and fox fire drawn in the
      * world's renderer, particle lights in its lights.
      */
-    ShowcaseEffects(VulkanDevice device, FrameSlots slots, DemoScene world, double x, double z, double radius)
-        throws InterruptedException {
+    ShowcaseEffects(VulkanDevice device, FrameSlots slots, DemoScene world, double x, double z, double radius,
+        EngineSettings settings) throws InterruptedException {
         FoxCrowd crowd = world.crowd();
         this.scene = crowd.scene();
+        this.worldScene = world.scene();
         this.x = x;
         this.z = z;
         this.radius = radius;
-        instances = world.gpuScene();
-        rock = world.rock();
-        wood = world.woodMaterial();
-        particles = new Particles(device, slots, Integer.getInteger("truesim.demo.sparks", 0) > 0 ? 256L << 20
-            : 128L << 20);
-        textures = new Textures(device, slots);
-        EffectTextures.register(particles, textures);
-        EffectTextures.registerFoxMask(particles, textures, crowd.bodyMesh());
+        async = settings.get(DemoSettings.ASYNC);
+        int sparks = settings.get(DemoSettings.SPARKS);
+        particles = new Particles(device, slots, sparks > 0 ? 256L << 20 : 128L << 20);
+        particles.assets(world.assets().resources()); // textures and meshes effects name, through the asset cache
+        EffectTextures.preload(world.assets());
         effects = new Effects(scene);
         sync = new EffectSync(effects, particles, new ParticleWorld() { // the terrain, for collision
             @Override
@@ -240,7 +237,6 @@ final class ShowcaseEffects implements AutoCloseable {
             }
         }, null);
         particles.meshes(world.renderer(), 1024); // rocks thrown; skins burning
-        particles.mesh(DemoEffects.ROCK, world.rock(), world.rockMaterial());
         particles.lights(world.lights(), 256);
         sync.meshes(crowd.sync());
         // Every fox kicks up dust where its feet come down; a tenth of them burn
@@ -265,29 +261,31 @@ final class ShowcaseEffects implements AutoCloseable {
             double a = l * Math.PI / 3;
             double c = Maths.cos(a / 2);
             double s = Maths.sin(a / 2);
-            instances.add(rock, wood, 1, true, x + 0.45 * Maths.cos(a), ground + 0.12, z + 0.45 * Maths.sin(a),
-                (float) (0.2 * c), (float) s, 0, (float) c, 0.13f, 0.13f, 0.75f); // logs, leaning in
+            world.prop(DemoScene.ROCK, DemoScene.WOOD, x + 0.45 * Maths.cos(a), ground + 0.12, z + 0.45 * Maths.sin(a),
+                (float) (0.2 * c), (float) s, 0, (float) c, 0.13f, 0.13f, 0.75f, true); // logs, leaning in
         }
         for (int l = 0; l < 10; l++) {
             double a = l * Math.PI / 5;
-            instances.add(rock, world.rockMaterial(), 1, true, x + 1.25 * Maths.cos(a), ground + 0.05,
-                z + 1.25 * Maths.sin(a), 0, 0, 0, 1, 0.22f, 0.16f, 0.22f); // stones around it
+            world.prop(DemoScene.ROCK, DemoScene.STONE, x + 1.25 * Maths.cos(a), ground + 0.05,
+                z + 1.25 * Maths.sin(a), 0, 0, 0, 1, 0.22f, 0.16f, 0.22f, true); // stones around it
         }
         effects.play(BONFIRE, x, ground + 0.15, z).inheritVelocity(0);
         // Torches on poles around the arena, swaying
         for (int t = 0; t < TORCHES; t++) {
             torches[t] = scene.create();
-            poles[2 * t] = instances.add(rock, wood, 1, true, x, ground, z, 0, 0, 0, 1, 1, 1, 1);
-            poles[2 * t + 1] = instances.add(rock, wood, 1, true, x, ground, z, 0, 0, 0, 1, 1, 1, 1);
+            poles[2 * t] = world.prop(DemoScene.ROCK, DemoScene.WOOD, x, ground, z, 0, 0, 0, 1, 1, 1, 1, true);
+            poles[2 * t + 1] = world.prop(DemoScene.ROCK, DemoScene.WOOD, x, ground, z, 0, 0, 0, 1, 1, 1, 1, true);
         }
         for (int o = 0; o < ORBS; o++) {
             orbs[o] = scene.create();
         }
         place(0);
         scene.update();
-        for (int t = 0; t < TORCHES; t++) {
-            effects.play(TORCH, torches[t]);
-            effects.play(TORCH_LIGHT, torches[t]);
+        for (int t = 0; t < TORCHES; t++) { // flames and their light as the torches' components: a node each
+            scene.components().set(torches[t], EffectEmitter.TYPE, EffectEmitter.of(TORCH));
+            long light = scene.create();
+            scene.setParent(light, torches[t]);
+            scene.components().set(light, EffectEmitter.TYPE, EffectEmitter.of(TORCH_LIGHT));
         }
         float[][] tints = {{0.3f, 1.2f, 2.4f}, {2.4f, 0.5f, 1.6f}, {0.6f, 2.4f, 0.8f}};
         long center = scene.create();
@@ -310,17 +308,17 @@ final class ShowcaseEffects implements AutoCloseable {
         playAt(DemoEffects.SWIRL, radius + 2, 4.3);
         playAt(DUST_DEVIL, radius + 4, 5.4);
         playAt(DemoEffects.LIT_SMOKE, radius + 5, 1.7);
-        extras(world, ground);
+        extras(world, ground, settings, sparks);
     }
 
     /**
-     * What the showcase's options add: {@code -Ptorches=N} torches in all (the arena's eight, the rest standing in rings
-     * beyond it, every one a placement of the six shared fires); {@code -Psparks=N} sparks over the middle, each
-     * emitting a trail of its own (particles as emitters, a ribbon per parent); {@code -Pglass=true} windows in front of
-     * the bonfire with sparks before them.
+     * What the showcase's options add: {@code --set demo.torches=N} torches in all (the arena's eight, the rest
+     * standing in rings beyond it, every one a placement of the six shared fires); {@code --set demo.sparks=N} sparks
+     * over the middle, each emitting a trail of its own (particles as emitters, a ribbon per parent);
+     * {@code -Pglass=true} windows in front of the bonfire with sparks before them.
      */
-    private void extras(DemoScene world, double ground) {
-        int extra = Integer.getInteger("truesim.demo.torches", TORCHES) - TORCHES;
+    private void extras(DemoScene world, double ground, EngineSettings settings, int sparks) {
+        int extra = settings.get(DemoSettings.TORCHES) - TORCHES;
         for (int t = 0, ring = 0, inRing = 0; t < extra; t++, inRing++) {
             double r = radius + 6 + 4 * ring;
             int around = (int) (2 * Math.PI * r / 3.5);
@@ -334,19 +332,20 @@ final class ShowcaseEffects implements AutoCloseable {
             double tx = x + r * Maths.cos(a);
             double tz = z + r * Maths.sin(a);
             double ty = DemoMeshes.height(tx, tz);
-            instances.add(rock, wood, 1, true, tx, ty + 0.8, tz, 0, 0, 0, 1, 0.05f, 0.85f, 0.05f);
-            instances.add(rock, wood, 1, true, tx, ty + 1.6, tz, 0, 0, 0, 1, 0.1f, 0.14f, 0.1f);
-            effects.play(TORCH, tx, ty + 1.72, tz);
+            world.prop(DemoScene.ROCK, DemoScene.WOOD, tx, ty + 0.8, tz, 0, 0, 0, 1, 0.05f, 0.85f, 0.05f, true);
+            world.prop(DemoScene.ROCK, DemoScene.WOOD, tx, ty + 1.6, tz, 0, 0, 0, 1, 0.1f, 0.14f, 0.1f, true);
+            long torch = scene.create();
+            scene.setTranslation(torch, tx, ty + 1.72, tz);
+            scene.components().set(torch, EffectEmitter.TYPE, EffectEmitter.of(TORCH));
         }
-        int sparks = Integer.getInteger("truesim.demo.sparks", 0);
         if (sparks > 0) {
             effects.play(sparkTrails(sparks), x, ground + 3, z);
         }
-        if (GLASS > 0) {
+        if (GLASS > 0 || settings.get(DemoSettings.GLASS)) {
             // A window of three panes between the bonfire and the camera's side, sparks before it
             for (int p = -1; p <= 1; p++) {
-                instances.add(world.pane(), world.glassMaterial(), 1, false, x + 2.1 * p, ground + 1.5, z + 2.6, 0, 0,
-                    0, 1, 2, 2.8f, 1);
+                world.prop(DemoScene.PANE, DemoScene.GLASS, x + 2.1 * p, ground + 1.5, z + 2.6, 0, 0, 0, 1, 2,
+                    2.8f, 1, false);
             }
             effects.play(DemoEffects.LIT_SPARKS, x + 0.6, ground, z + 4.2);
         }
@@ -495,9 +494,9 @@ final class ShowcaseEffects implements AutoCloseable {
             double uz = kx * s;
             float qs = (float) Maths.sin(angle / 2);
             float qw = (float) Maths.cos(angle / 2);
-            instances.set(poles[2 * i], rock, wood, bx + 0.8 * ux, by + 0.8 * uy, bz + 0.8 * uz, (float) kx * qs, 0,
+            worldScene.setLocal(poles[2 * i], bx + 0.8 * ux, by + 0.8 * uy, bz + 0.8 * uz, (float) kx * qs, 0,
                 (float) kz * qs, qw, 0.05f, 0.85f, 0.05f);
-            instances.set(poles[2 * i + 1], rock, wood, bx + 1.6 * ux, by + 1.6 * uy, bz + 1.6 * uz, (float) kx * qs, 0,
+            worldScene.setLocal(poles[2 * i + 1], bx + 1.6 * ux, by + 1.6 * uy, bz + 1.6 * uz, (float) kx * qs, 0,
                 (float) kz * qs, qw, 0.1f, 0.14f, 0.1f);
             scene.setTranslation(torches[i], bx + 1.72 * ux, by + 1.72 * uy, bz + 1.72 * uz);
         }
@@ -549,7 +548,7 @@ final class ShowcaseEffects implements AutoCloseable {
     }
 
     ParticleSimulation simulation() {
-        return new ParticleSimulation(particles).async(Boolean.getBoolean("truesim.demo.async"));
+        return new ParticleSimulation(particles).async(async);
     }
 
     /**
@@ -575,6 +574,5 @@ final class ShowcaseEffects implements AutoCloseable {
     @Override
     public void close() {
         particles.close();
-        textures.close();
     }
 }

@@ -9,3 +9,12 @@ out/
 
 # JVM crash logs
 hs_err_pid*.log
+
+# Sample content mounted as demo:// (DemoSettings.ASSETS): the Khronos glTF sample models, Sponza and the like are
+# never committed
+/assets/
+**/Sponza/
+*.glb
+*.gltf
+*.bin
+*.ktx2

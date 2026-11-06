@@ -59,8 +59,8 @@ class ReferenceScreenshots {
         try (VulkanInstance instance = VulkanInstance.builder().applicationName("screenshots").surfaces(false).build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), VK_FORMAT_R32G32B32A32_SFLOAT,
-                 VK_FORMAT_D32_SFLOAT, true);
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), VK_FORMAT_R32G32B32A32_SFLOAT,
+                 VK_FORMAT_D32_SFLOAT, DemoSettings.standalone(), true, null);
              GpuImage target = new GpuImage(device, WIDTH, HEIGHT, VK_FORMAT_R32G32B32A32_SFLOAT, usage,
                  VK_IMAGE_ASPECT_COLOR_BIT);
              GpuBuffer pixels = GpuBuffer.hostVisible(device, (long) WIDTH * HEIGHT * 16,
@@ -97,7 +97,7 @@ class ReferenceScreenshots {
             port.remove(reference);
             com.truesim.engine.render.shadows.Shadows shadows = new com.truesim.engine.render.shadows.Shadows(
                 world.geometry(), world.lights()).rayTracing(world.rayTracing());
-            world.lights().shadow(0, com.truesim.scene.core.ShadowSpec.rayTraced());
+            world.sunShadows(com.truesim.scene.core.ShadowSpec.rayTraced());
             port.add(shadows.view(view));
             for (int frame = 0; frame < 4; frame++) {
                 graph.beginFrame();
@@ -121,8 +121,8 @@ class ReferenceScreenshots {
         try (VulkanInstance instance = VulkanInstance.builder().applicationName("screenshots").surfaces(false).build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), VK_FORMAT_R32G32B32A32_SFLOAT,
-                 VK_FORMAT_D32_SFLOAT, false);
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), VK_FORMAT_R32G32B32A32_SFLOAT,
+                 VK_FORMAT_D32_SFLOAT);
              GpuImage target = new GpuImage(device, WIDTH, HEIGHT, VK_FORMAT_R32G32B32A32_SFLOAT, usage,
                  VK_IMAGE_ASPECT_COLOR_BIT);
              GpuImage motionImage = new GpuImage(device, WIDTH, HEIGHT,

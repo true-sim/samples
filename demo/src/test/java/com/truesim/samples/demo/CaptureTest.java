@@ -44,7 +44,7 @@ class CaptureTest {
         float exposure = 0.8f;
         try (instance; VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), VK_FORMAT_R16G16B16A16_SFLOAT,
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), VK_FORMAT_R16G16B16A16_SFLOAT,
                  VK_FORMAT_D32_SFLOAT)) {
             graph.settings().set(DisplayTransform.EXPOSURE, exposure);
             Camera camera = new Camera();

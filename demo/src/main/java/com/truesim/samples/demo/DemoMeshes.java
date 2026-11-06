@@ -2,6 +2,7 @@ package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
 import com.truesim.scene.assets.mesh.MeshData;
+import com.truesim.scene.assets.mesh.MeshPool;
 import com.truesim.scene.assets.mesh.VertexAttribute;
 import com.truesim.scene.assets.mesh.VertexFormat;
 import com.truesim.scene.meshbuild.MeshBuilder;
@@ -56,6 +57,11 @@ final class DemoMeshes {
      * placed at {@code height(x, z)} stands on it.
      */
     static MeshData groundTile(double x0, double z0, double size, int n) {
+        return groundTile(x0, z0, size, n, null);
+    }
+
+    /** {@link #groundTile(double, double, double, int)} built into a mesh {@code pool} kept, if it has one that fits. */
+    static MeshData groundTile(double x0, double z0, double size, int n, MeshPool pool) {
         int count = (n + 1) * (n + 1);
         float[] positions = new float[count * 3];
         float[] normals = new float[count * 3];
@@ -92,7 +98,7 @@ final class DemoMeshes {
                 indices[at++] = a + n + 2;
             }
         }
-        return new MeshBuilder(VertexFormat.of(VertexAttribute.NORMAL), count).positions(positions)
+        return new MeshBuilder(VertexFormat.of(VertexAttribute.NORMAL), count).pool(pool).positions(positions)
             .attribute(VertexAttribute.NORMAL, normals).submesh(indices).buildHierarchy();
     }
 
@@ -110,6 +116,11 @@ final class DemoMeshes {
      * the radius.
      */
     static MeshData rock(int subdivisions) {
+        return rock(subdivisions, null);
+    }
+
+    /** {@link #rock(int)} built into a mesh {@code pool} kept, if it has one that fits. */
+    static MeshData rock(int subdivisions, MeshPool pool) {
         double t = (1 + Math.sqrt(5)) / 2;
         List<double[]> vertices = new ArrayList<>(List.of(new double[] {-1, t, 0}, new double[] {1, t, 0},
             new double[] {-1, -t, 0}, new double[] {1, -t, 0}, new double[] {0, -1, t}, new double[] {0, 1, t},
@@ -147,7 +158,7 @@ final class DemoMeshes {
             positions[3 * v + 1] = (float) (y * radius);
             positions[3 * v + 2] = (float) (z * radius);
         }
-        return new MeshBuilder(VertexFormat.of(VertexAttribute.NORMAL), vertices.size()).positions(positions)
+        return new MeshBuilder(VertexFormat.of(VertexAttribute.NORMAL), vertices.size()).pool(pool).positions(positions)
             .attribute(VertexAttribute.NORMAL, normals(positions, faces)).submesh(faces).buildHierarchy();
     }
 

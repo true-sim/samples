@@ -1,19 +1,13 @@
 package com.truesim.samples.demo;
 
 import com.truesim.common.jobs.JobSystem;
-import com.truesim.common.jobs.TaskScheduler;
 import com.truesim.common.math.Maths;
 import com.truesim.common.state.ChangeClock;
 import com.truesim.engine.render.GeometryPool;
 import com.truesim.engine.render.GpuScene;
-import com.truesim.engine.render.Materials;
 import com.truesim.engine.render.RayTracing;
-import com.truesim.engine.render.Textures;
 import com.truesim.engine.scene.Animation;
-import com.truesim.engine.scene.SceneResources;
 import com.truesim.engine.scene.SceneSync;
-import com.truesim.engine.vulkan.FrameSlots;
-import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.scene.animation.Animator;
 import com.truesim.scene.animation.Animators;
 import com.truesim.scene.animation.BlendSpace1;
@@ -24,25 +18,17 @@ import com.truesim.scene.animation.Joint;
 import com.truesim.scene.animation.LookAt;
 import com.truesim.scene.animation.Rig;
 import com.truesim.scene.animation.TwoBoneIk;
-import com.truesim.scene.assets.AssetCache;
-import com.truesim.scene.assets.AssetRef;
-import com.truesim.scene.assets.PathAssets;
-import com.truesim.scene.assets.PathSource;
 import com.truesim.scene.core.ComponentStore;
 import com.truesim.scene.core.SceneGraph;
-import com.truesim.scene.gltf.Gltf;
-import com.truesim.scene.render.ImageImporter;
 import com.truesim.scene.render.ModelData;
 import com.truesim.scene.render.RenderAssets;
 import com.truesim.scene.render.Renderable;
-import java.nio.file.Path;
-import java.util.List;
 import java.util.SplittableRandom;
 
 /**
- * A crowd of Khronos foxes for benchmarks ({@code -Dtruesim.demo.foxes=1000}): each with the whole rig the demo's fox
+ * A crowd of Khronos foxes for benchmarks ({@code --set demo.foxes=1000}), loaded through the shared assets: each with the whole rig the demo's fox
  * has (a walk/run blend space or surveying, a look-at, a FABRIK tail, foot placement on four legs), its own animator
- * and its own GPU-skinned copy, on a grid around the middle of the terrain. With {@code -Dtruesim.demo.foxLod=true},
+ * and its own GPU-skinned copy, on a grid around the middle of the terrain. With {@code --set demo.foxLod=true},
  * animation level of detail by distance from a point (the benchmark's camera): every update within 15 m, every second
  * up to 40 m, every fourth beyond. Times what animating them costs the CPU per update: the animators, then the scene
  * sync (joint matrices and bounds for the GPU).
@@ -56,11 +42,8 @@ final class FoxCrowd implements AutoCloseable {
     /** How many rings the roaming foxes walk and run on, the innermost slowest. */
     private static final int RINGS = 6;
 
-    private final TaskScheduler tasks = new TaskScheduler();
-    private final AssetCache cache = new AssetCache(tasks);
     private final JobSystem jobs = JobSystem.ofAvailableProcessors();
-    private final Textures textures;
-    private final SceneResources resources;
+    private final DemoAssets assets;
     private final SceneGraph scene = new SceneGraph(new ChangeClock());
     private final ComponentStore<Renderable> renderables = scene.components().store(Renderable.TYPE);
     private final Animators animators;
@@ -91,49 +74,35 @@ final class FoxCrowd implements AutoCloseable {
     private int updates;
 
     /**
-     * {@code count} foxes from {@code file} drawn into {@code gpu}; with {@code lod}, updated less often the further
-     * they are from ({@code eyeX}, {@code eyeZ}); traced by {@code rayTracing}, if not null (its copies' bottom levels
-     * refitted as they are skinned).
+     * {@code count} foxes of model {@code model} (an asset path) from {@code assets}, drawn into {@code gpu}; with
+     * {@code lod}, updated less often the further they are from ({@code eyeX}, {@code eyeZ}); traced where the assets'
+     * resources trace (their copies' bottom levels refitted as they are skinned).
      */
-    FoxCrowd(VulkanDevice device, FrameSlots slots, GeometryPool pool, Materials materials, GpuScene gpu, Path file,
-        int count, boolean lod, double eyeX, double eyeZ,
-        RayTracing rayTracing, Animation animation) throws InterruptedException {
-        this(device, slots, pool, materials, gpu, file, count, lod, eyeX, eyeZ, rayTracing, null, animation);
+    FoxCrowd(DemoAssets assets, GpuScene gpu, String model, int count, boolean lod, double eyeX, double eyeZ,
+        Animation animation) throws InterruptedException {
+        this(assets, gpu, model, count, lod, eyeX, eyeZ, null, animation);
     }
 
     /** The arena's foxes roaming in it, drawn into {@code gpu}, with level of detail by distance from the camera. */
-    FoxCrowd(VulkanDevice device, FrameSlots slots, GeometryPool pool, Materials materials, GpuScene gpu,
-        DemoScene.Arena arena, Animation animation) throws InterruptedException {
-        this(device, slots, pool, materials, gpu, arena.fox(), arena.foxes(), true, arena.x(), arena.z(), null, arena,
-            animation);
+    FoxCrowd(DemoAssets assets, GpuScene gpu, DemoScene.Arena arena, Animation animation)
+        throws InterruptedException {
+        this(assets, gpu, arena.fox(), arena.foxes(), true, arena.x(), arena.z(), arena, animation);
     }
 
-    private FoxCrowd(VulkanDevice device, FrameSlots slots, GeometryPool pool, Materials materials, GpuScene gpu,
-        Path file, int count, boolean lod, double eyeX, double eyeZ, RayTracing rayTracing, DemoScene.Arena arena,
-        Animation animation)
-        throws InterruptedException {
-        this.pool = pool;
-        this.rayTracing = rayTracing;
+    private FoxCrowd(DemoAssets assets, GpuScene gpu, String file, int count, boolean lod, double eyeX, double eyeZ,
+        DemoScene.Arena arena, Animation animation) throws InterruptedException {
+        this.assets = assets;
+        this.pool = assets.pool();
+        this.rayTracing = assets.resources().rayTracing();
         this.arena = arena;
-        textures = new Textures(device, slots);
-        resources = new SceneResources(cache, pool, materials, textures);
-        if (rayTracing != null) {
-            resources.rayTracing(rayTracing); // its meshes and skinned copies traced
-        }
-        sync = new SceneSync(resources, scene, gpu, jobs);
+        sync = new SceneSync(assets.resources(), scene, gpu, jobs);
         this.animation = animation;
         animators = animation.animators(scene); // sampled in parallel on the plugin's threads
-        PathAssets paths = new PathAssets(cache);
-        paths.mounts().add("crowd", PathSource.folder(file.getParent()));
-        new Gltf(paths).register();
-        for (String extension : List.of("png", "jpg", "jpeg")) {
-            paths.importers().add(RenderAssets.TEXTURE, extension, ImageImporter.INSTANCE);
-        }
-        model = await(paths.ref(RenderAssets.MODEL, "crowd://" + file.getFileName()));
+        model = assets.await(assets.ref(RenderAssets.MODEL, file));
         Rig.Builder r = Rig.builder(model.skeleton());
-        Clip survey = r.clip(await(model.animation("Survey")));
-        Clip walk = r.clip(await(model.animation("Walk")));
-        Clip run = r.clip(await(model.animation("Run")));
+        Clip survey = r.clip(assets.await(model.animation("Survey")));
+        Clip walk = r.clip(assets.await(model.animation("Walk")));
+        Clip run = r.clip(assets.await(model.animation("Run")));
         if (arena != null) {
             DemoCharacter.footEvents(walk, run); // dust where their feet come down
         }
@@ -219,22 +188,6 @@ final class FoxCrowd implements AutoCloseable {
             + (arena == null ? "" : ", roaming"));
     }
 
-    private <T> T await(AssetRef<T> ref) throws InterruptedException {
-        cache.acquire(ref);
-        long deadline = System.nanoTime() + 60_000_000_000L;
-        while (cache.get(ref) == null && cache.failure(ref) == null) {
-            if (System.nanoTime() > deadline) {
-                throw new IllegalStateException("Loading " + ref + " took too long");
-            }
-            Thread.sleep(1);
-            tasks.drainCompleted();
-        }
-        if (cache.failure(ref) != null) {
-            throw new IllegalStateException("Could not load " + ref, cache.failure(ref));
-        }
-        return cache.get(ref);
-    }
-
     /**
      * Animation level of detail by distance from ({@code eyeX}, {@code eyeZ}): every update within 15 m, every second
      * up to 40 m, every fourth beyond.
@@ -277,7 +230,6 @@ final class FoxCrowd implements AutoCloseable {
      * UPDATE; the animation plugin poses them in ANIMATE, {@link #draw} draws them.
      */
     void update(double seconds, double lx, double ly, double lz) {
-        tasks.drainCompleted();
         place(seconds);
         for (Animator a : crowd) {
             a.lookAt(look).target(lx, ly, lz).weight(1);
@@ -289,6 +241,7 @@ final class FoxCrowd implements AutoCloseable {
         boolean time = ++updates > 30; // after a warm-up
         long animated = animation.lastNanos(animators);
         long start = System.nanoTime();
+        scene.update();
         sync.update();
         long synced = System.nanoTime();
         lastAnimation = animated;
@@ -355,7 +308,7 @@ final class FoxCrowd implements AutoCloseable {
     com.truesim.scene.assets.mesh.MeshData bodyMesh() throws InterruptedException {
         for (ModelData.Node node : model.nodes()) {
             if (node.mesh() != null && node.skin() >= 0) {
-                return await(node.mesh());
+                return assets.await(node.mesh());
             }
         }
         throw new IllegalStateException("The model has no skinned mesh");
@@ -379,10 +332,6 @@ final class FoxCrowd implements AutoCloseable {
     @Override
     public void close() {
         sync.close();
-        resources.close();
-        cache.close();
-        tasks.close();
         jobs.close();
-        textures.close();
     }
 }

@@ -1,12 +1,9 @@
 package com.truesim.samples.demo;
 
-import com.truesim.common.jobs.TaskScheduler;
 import com.truesim.common.math.Maths;
 import com.truesim.common.math.random.Hash;
-import com.truesim.common.state.ChangeClock;
 import com.truesim.engine.audio.Audio;
 import com.truesim.engine.audio.HeadPose;
-import com.truesim.scene.assets.AssetCache;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.Generator;
 import com.truesim.scene.audio.AudioAssets;
@@ -18,7 +15,6 @@ import com.truesim.scene.audio.Play;
 import com.truesim.scene.audio.Range;
 import com.truesim.scene.audio.Sound;
 import com.truesim.scene.audio.Sounds;
-import com.truesim.scene.core.SceneGraph;
 
 /**
  * The demo's sound (audio step 6): rocks dropped in front of the camera that knock when they land, heard from the
@@ -54,16 +50,12 @@ final class KnockingRocks implements AutoCloseable {
     };
 
     private final DemoScene world;
-    private final SceneGraph scene = new SceneGraph(new ChangeClock());
-    private final long listener;
     private final Sounds sounds;
 
     /** The rocks' and the car's sounds: for the audio overlay's listener graph. */
     Sounds sounds() {
         return sounds;
     }
-    private final AssetCache cache;
-    private final TaskScheduler tasks;
     private final Sound knock;
     private final double[] positions = new double[3 * ROCKS];
     private final double[] velocity = new double[ROCKS];
@@ -73,18 +65,20 @@ final class KnockingRocks implements AutoCloseable {
     private final CameraCar car;
     private int knocks;
 
-    KnockingRocks(Audio audio, DemoScene world, TaskScheduler tasks, double[] eye, double yaw, HeadPose head) {
+    /**
+     * The rocks in {@code world}'s scene, heard through the world's assets by a listener on {@code cameraNode} (the
+     * camera's node: it hears where the camera is), dropped ahead of {@code eye} looking along {@code yaw}; in VR the
+     * {@code head} listens instead.
+     */
+    KnockingRocks(Audio audio, DemoScene world, long cameraNode, double[] eye, double yaw, HeadPose head) {
         this.world = world;
-        this.tasks = tasks;
-        cache = new AssetCache(tasks);
-        sounds = audio.assets(cache).sounds(scene);
-        listener = scene.create();
-        long camera = sounds.listeners().device(listener).id();
+        sounds = audio.assets(world.assets().cache()).sounds(world.scene());
+        long camera = sounds.listeners().device(cameraNode).id();
         if (head != null) { // in VR the head listens (and the plugin turns the HRTF on), not the desktop camera
             sounds.listeners().remove(camera);
             audio.head(sounds, head);
         }
-        car = new CameraCar(audio, sounds);
+        car = new CameraCar(audio, sounds, cameraNode);
         AssetRef<AudioClip> clip = AssetRef.generated(AudioAssets.CLIP, KNOCK, 0, 17);
         knock = Sound.builder().root(Play.clip(clip)).attenuation(Attenuation.near(2, 80))
             .volume(Range.db(-3, 0)).pitch(Range.semitones(-3, 3))
@@ -112,12 +106,8 @@ final class KnockingRocks implements AutoCloseable {
         rest[i] = wait;
     }
 
-    /** Moves the rocks by {@code dt}, knocks where they land, and puts the listener at the camera. */
-    void update(double dt, double[] eye, double yaw) {
-        tasks.drainCompleted();
-        double half = (yaw + Math.PI) / 2; // the listener's -z ahead along the camera's yaw
-        scene.setLocal(listener, eye[0], eye[1], eye[2], 0, Maths.sin(half), 0, Maths.cos(half), 1, 1, 1);
-        scene.update();
+    /** Moves the rocks by {@code dt} and knocks where they land; the car follows the camera at {@code eye}. */
+    void update(double dt, double[] eye) {
         car.update(dt, eye);
         for (int i = 0; i < ROCKS; i++) {
             if (rest[i] > 0) {
@@ -158,6 +148,5 @@ final class KnockingRocks implements AutoCloseable {
     @Override
     public void close() {
         car.stop();
-        cache.close();
     }
 }

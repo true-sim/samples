@@ -56,7 +56,7 @@ class DemoSceneTest {
             | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         try (instance; VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), org.lwjgl.vulkan.VK10.VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT);
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), org.lwjgl.vulkan.VK10.VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT);
              GpuImage target = new GpuImage(device, SIZE, SIZE, VK_FORMAT_R8G8B8A8_UNORM, usage,
                  VK_IMAGE_ASPECT_COLOR_BIT);
              GpuBuffer pixels = GpuBuffer.hostVisible(device, SIZE * SIZE * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT)) {

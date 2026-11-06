@@ -16,6 +16,8 @@ import com.truesim.engine.platform.Desktop;
 import com.truesim.engine.render.Camera;
 import com.truesim.engine.render.MeshletRenderer;
 import com.truesim.engine.render.SceneView;
+import com.truesim.engine.scene.Assets;
+import com.truesim.engine.scene.CameraSync;
 import com.truesim.engine.settings.Setting;
 import com.truesim.engine.settings.SettingRegistry;
 import com.truesim.engine.ui.UiPlugin;
@@ -81,7 +83,12 @@ import java.util.Set;
  * wheel zooms, Home resets. The live profiler runs over the app's own frames on every page: F3 the frame graph overlay,
  * Shift+F3 the detailed profiler, F4 freeze, Shift+F4 step, Ctrl+F4 export. The backquote opens the console.
  *
- * <p>{@code ./gradlew :engine-demo:uiGallery} ({@code -Pseconds=n} quits after n seconds).
+ * <p>{@code ./gradlew :samples-demo:uiGallery} ({@code -Pseconds=n} quits after n seconds). Its developer options are
+ * settings ({@link DemoSettings}): {@code --set gallery.rocks=n} rocks, {@code --set gallery.shots=dir} what each page of
+ * a tour shows as PNGs ({@code -Pshots=dir}).
+ *
+ * <p>Still loaded outside the asset manager, as no asset type covers them yet: the themes (the UI's classpath) and the
+ * gallery's rules (inline), the bundled fonts; and the world panel is placed by its own transform, not a scene node.
  */
 public final class UiGallery implements Application {
 
@@ -98,7 +105,7 @@ public final class UiGallery implements Application {
     private final double seconds;
     private final boolean tour;
     private long frames;
-    private GalleryShots shots; // with -Pshots=dir: what the window shows, a PNG per page of the tour
+    private GalleryShots shots; // with gallery.shots=dir: what the window shows, a PNG per page of the tour
     final GalleryWorld world = new GalleryWorld();
     private final UiPlugin uiPlugin = new UiPlugin(this::makeUi).view("main");
     private StyleSheet defaultSheet;
@@ -113,6 +120,13 @@ public final class UiGallery implements Application {
     private UiConsole console;
     Gizmo gizmo;
     private SceneView minimapView;
+    private CameraSync minimapCamera; // the minimap's camera, following the world's top node
+    // the orbit camera's node as last placed: placed again only when it moves
+    private double eyeX = Double.NaN;
+    private double eyeY;
+    private double eyeZ;
+    private double eyeYaw;
+    private double eyePitch;
     private Layer navLayer;
     private Layer backdropLayer;
     private Layer sceneLayer;
@@ -168,8 +182,8 @@ public final class UiGallery implements Application {
     @Override
     public void configure(AppConfig app) {
         app.id("truesim-ui-gallery").name("true-sim UI gallery").use(new Desktop(),
-            new Input().add(GalleryActions.GALLERY), new Rendering(), new Profiling(), new SceneInteraction(), world,
-            uiPlugin);
+            new Input().add(GalleryActions.GALLERY), new Rendering(), new Assets(), new Profiling(),
+            new SceneInteraction(), world, uiPlugin);
     }
 
     /** The UI: the default theme and the gallery's few rules, the bundled fonts and colour emoji. */
@@ -232,8 +246,8 @@ public final class UiGallery implements Application {
         nav.add(c.button("Profiler").onClick(() -> toggle(ProfilerSettings.OVERLAY)).element());
         nav.add(c.button("Detailed").onClick(() -> toggle(ProfilerSettings.VIEW)).element());
         show(0);
-        String shotDir = System.getProperty("truesim.gallery.shots");
-        if (shotDir != null) {
+        String shotDir = engine.settings().get(DemoSettings.GALLERY_SHOTS);
+        if (!shotDir.isEmpty()) {
             for (var target : engine.get(Rendering.KEY).presenter().targets()) {
                 if (target.view() == world.port) {
                     shots = new GalleryShots(target.shownKey(), java.nio.file.Path.of(shotDir));
@@ -299,12 +313,12 @@ public final class UiGallery implements Application {
                 pitch = Math.max(-1.5, Math.min(1.5, pitch - byPitch));
             }
         });
+        // the minimap: the renderer's camera the UI's camera view needs, following the world's top camera node
         Camera top = new Camera();
         GpuCameraView minimap = new GpuCameraView(world.frameGraph, uiPlugin.renderer(), ui.textures(), "minimap",
             512, 512);
-        double half = GalleryWorld.GROUND_SIZE / 2.0;
-        minimap.onResize((w, h) -> top.position(0, 120, 0).setOrthographic(0, 0, 0, 0, -1, 0, 0, 0, -1,
-            half * w / h, half, 300, w, h));
+        minimapCamera = new CameraSync(world.graph, world.top, top, minimap.view());
+        minimap.onResize(minimapCamera::update); // sized at once, not a frame late
         minimapView = world.viewOn(minimap.view(), top);
         CameraView map = new CameraView(ui, minimap, scene.picking(), "camera-view");
         minimap.follow(top, map);
@@ -605,7 +619,7 @@ public final class UiGallery implements Application {
         if (imm != null && pages.get(current).name.equals("Imm")) {
             imm.tool(); // immediate mode: its calls each frame, between the UI's input and its update
         }
-        camera((int) Math.max(1, w), (int) Math.max(1, h));
+        camera();
     }
 
     /** The orbit camera's input: right-drag orbits, middle-drag pans, the wheel zooms, Home resets. */
@@ -629,18 +643,35 @@ public final class UiGallery implements Application {
         }
     }
 
-    private void camera(int width, int height) {
+    /**
+     * The orbit camera's node: at the eye, turned by the yaw about Y and the pitch down about X, so its -Z looks at the
+     * target; the main camera follows it at the world's sync ({@link CameraSync}). Placed only when it moved.
+     */
+    private void camera() {
         double cp = Maths.cos(pitch);
         double ex = targetX + distance * cp * Maths.sin(yaw);
         double ey = targetY + distance * Maths.sin(pitch);
         double ez = targetZ + distance * cp * Maths.cos(yaw);
-        world.camera.position(ex, ey, ez).set(targetX - ex, targetY - ey, targetZ - ez, 0, 1, 0, Maths.toRadians(55),
-            width, height, 0.1);
+        if (ex == eyeX && ey == eyeY && ez == eyeZ && yaw == eyeYaw && pitch == eyePitch) {
+            return;
+        }
+        eyeX = ex;
+        eyeY = ey;
+        eyeZ = ez;
+        eyeYaw = yaw;
+        eyePitch = pitch;
+        double a = Maths.cos(yaw / 2);
+        double b = Maths.sin(yaw / 2);
+        double c = -Maths.sin(pitch / 2);
+        double d = Maths.cos(pitch / 2);
+        world.graph.setTranslation(world.eye, ex, ey, ez);
+        world.graph.setRotation(world.eye, a * c, d * b, -b * c, a * d); // about Y by the yaw, then X by -pitch
     }
 
     @Override
     public void lateUpdate(Frame frame) {
         world.sync();
+        minimapCamera.update();
         minimapView.set(1, MeshletRenderer.MODE_LIT);
     }
 
