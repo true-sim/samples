@@ -115,6 +115,8 @@ tasks.register<JavaExec>("uiGallery") {
     // -Pseconds=n quits after n seconds; -Ptour=true visits every page and opens the profiler's views (a smoke run)
     providers.gradleProperty("seconds").orNull?.let { args("--seconds=$it") }
     providers.gradleProperty("tour").orNull?.let { if (it == "true") args("--tour") }
-    // -Pshots=<dir>: during a tour, what the window shows of each page as PNGs
-    providers.gradleProperty("shots").orNull?.let { systemProperty("truesim.gallery.shots", it) }
+    // -Pshots=<dir>: during a tour, what the window shows of each page as PNGs (the setting gallery.shots)
+    providers.gradleProperty("shots").orNull?.let { args("--set", "gallery.shots=$it") }
+    // -Procks=n: rocks in the 3D scene (the setting gallery.rocks)
+    providers.gradleProperty("rocks").orNull?.let { args("--set", "gallery.rocks=$it") }
 }
