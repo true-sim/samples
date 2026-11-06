@@ -22,7 +22,7 @@ import com.truesim.scene.core.SceneGraph;
 import com.truesim.ui.scene.SceneView;
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.sdl.SDL_CommonEvent;
 import org.lwjgl.sdl.SDL_Event;
@@ -160,7 +160,7 @@ class UiGalleryTest {
     }
 
     @Test
-    @Tag("soak") // long on CI's software GPU: nightly and on demand (./gradlew build -Psoak=true)
+    @EnabledIfEnvironmentVariable(named = "TRUESIM_SOAK", matches = "true") // long on CI's software GPU: nightly
     void sweepingTheMouseOverTheRocksKeepsFramesEven() {
         app = new UiGallery(0, false);
         try {

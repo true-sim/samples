@@ -1,7 +1,7 @@
 name: CI
 
 # Tests run on pull requests only: main gets exactly a tested, up-to-date PR (release.sh merges only those), so a
-# push to main only compiles, to keep the Gradle cache that pull requests read warm. The soak tests (@Tag("soak"))
+# push to main only compiles, to keep the Gradle cache that pull requests read warm. The soak tests (TRUESIM_SOAK)
 # run nightly and on demand, not on pull requests.
 on:
   push:
@@ -42,9 +42,10 @@ jobs:
           java-version: 27
       - uses: gradle/actions/setup-gradle@v6
         if: steps.changes.outputs.code == 'true'
-      - run: ./gradlew ${{ github.event_name == 'push' && 'assemble testClasses' || 'build' }} ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '-Psoak=true' || '' }}
+      - run: ./gradlew ${{ github.event_name == 'push' && 'assemble testClasses' || 'build' }}
         if: steps.changes.outputs.code == 'true'
         env:
+          TRUESIM_SOAK: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v7

@@ -117,8 +117,8 @@ title shows the frame rate, GPU time, render size and display encoding. Settings
 Needs Java 27 and a Vulkan 1.3 driver, as the engine does.
 
 ```bash
-./gradlew build                  # pull requests: everything but the soak tests
-./gradlew build -Psoak=true      # with the soak tests (@Tag("soak")), as the nightly run
+./gradlew build                      # pull requests: everything but the soak tests
+TRUESIM_SOAK=true ./gradlew build    # with the soak tests (StreamBenchMemoryTest, the gallery's mouse sweep): nightly
 ```
 
 Sibling checkouts (`../engine`, `../scene`, `../ui`, `../build-logic`, `../common-*`) build with the samples as one

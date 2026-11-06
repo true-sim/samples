@@ -130,13 +130,3 @@ tasks.register<JavaExec>("uiGallery") {
     // -Procks=n: rocks in the 3D scene (the setting gallery.rocks)
     providers.gradleProperty("rocks").orNull?.let { args("--set", "gallery.rocks=$it") }
 }
-
-// Soak tests (@Tag("soak"): the stream benchmark's memory, the gallery's mouse sweep) take long on CI's software GPU:
-// pull requests leave them out, the nightly and manual runs take them in (-Psoak=true).
-tasks.test {
-    useJUnitPlatform {
-        if (providers.gradleProperty("soak").orNull != "true") {
-            excludeTags("soak")
-        }
-    }
-}
