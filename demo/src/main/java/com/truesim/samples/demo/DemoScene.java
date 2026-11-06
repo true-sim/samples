@@ -4,11 +4,9 @@ import com.truesim.common.math.Maths;
 import com.truesim.common.state.ChangeClock;
 import com.truesim.engine.render.GpuScene;
 import com.truesim.engine.render.Lights;
-import com.truesim.engine.render.Material;
 import com.truesim.engine.render.MeshletRenderer;
 import com.truesim.engine.render.RayTracing;
 import com.truesim.engine.render.SceneGeometry;
-import com.truesim.engine.render.materials.MetallicRoughnessParameters;
 import com.truesim.engine.scene.Animation;
 import com.truesim.engine.scene.LightSync;
 import com.truesim.engine.scene.SceneSync;
@@ -123,8 +121,6 @@ final class DemoScene implements AutoCloseable {
     private final boolean ownsAnimation; // made here, for frames recorded without an engine: advanced by update
     // The particles' rock (mesh and material ids): particles name GPU slots themselves until the engine resolves
     // assets for techniques (the engine split plan's 7.5), so this one copy is added by hand, made on first use
-    private int particleRock = -1;
-    private int particleRockMaterial = -1;
     private double last; // the seconds of the last update
 
     /**
@@ -293,28 +289,6 @@ final class DemoScene implements AutoCloseable {
         scene.setScale(node, sx, sy, sz);
         renderables.set(node, Renderable.of(mesh, List.of(material)).withCastsShadows(castsShadows));
         return node;
-    }
-
-    /**
-     * The rock as a particle mesh (debris thrown by blasts): its id in the geometry pool. Particles name pool meshes
-     * and material ids themselves until the engine resolves assets for techniques (the engine split plan's 7.5), so
-     * the rock's mesh and its plain material are added for them by hand here, once.
-     */
-    int particleRock() {
-        if (particleRock < 0) {
-            try (MeshData mesh = DemoMeshes.rock(4)) {
-                particleRock = assets.pool().add(mesh);
-            }
-            particleRockMaterial = assets.resources().materials().add(new Material(MetallicRoughnessParameters.DEFAULTS
-                .withBaseColor(new com.truesim.common.math.color.Color(0.55f, 0.5f, 0.45f, 1)).withRoughness(0.8f)));
-        }
-        return particleRock;
-    }
-
-    /** The particle rock's material id ({@link #particleRock}). */
-    int particleRockMaterial() {
-        particleRock();
-        return particleRockMaterial;
     }
 
     /** The crowd of foxes, or null without. */

@@ -27,7 +27,7 @@ project(":samples-bench").projectDir = file("bench")
 // the rest when present; -Ptruesim.<repo>=<path> points at another checkout (-Ptruesim.engine=../engine-split1),
 // -Ptruesim.<repo>=false uses the published artifact.
 val truesimRepos = listOf("build-logic", "common-math", "common-state", "common-jobs", "common-graph", "scene", "ui",
-    "engine")
+    "engine", "effects-particles")
 for (repo in truesimRepos) {
     providers.gradleProperty("truesim.$repo").orElse("../$repo").get()
         .takeIf { file(it).isDirectory }?.let { includeBuild(it) }

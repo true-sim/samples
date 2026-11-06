@@ -1,24 +1,24 @@
 package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
-import com.truesim.engine.render.particles.ParticleSimulation;
-import com.truesim.engine.render.particles.Particles;
-import com.truesim.engine.scene.EffectBindings;
-import com.truesim.engine.scene.EffectSync;
+import com.truesim.effects.particles.ParticleSimulation;
+import com.truesim.effects.particles.Particles;
+import com.truesim.effects.particles.scene.EffectBindings;
+import com.truesim.effects.particles.scene.EffectSync;
+import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.vulkan.FrameSlots;
 import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.scene.core.SceneGraph;
-import com.truesim.engine.settings.EngineSettings;
-import com.truesim.scene.effects.EffectEmitter;
 import com.truesim.scene.effects.Bind;
 import com.truesim.scene.effects.Collide;
 import com.truesim.scene.effects.ColorGradient;
 import com.truesim.scene.effects.Effect;
 import com.truesim.scene.effects.EffectData;
+import com.truesim.scene.effects.EffectEmitter;
 import com.truesim.scene.effects.EffectParameter;
 import com.truesim.scene.effects.EffectType;
-import com.truesim.scene.effects.EmitterData;
 import com.truesim.scene.effects.Effects;
+import com.truesim.scene.effects.EmitterData;
 import com.truesim.scene.effects.FloatCurve;
 import com.truesim.scene.effects.Forces;
 import com.truesim.scene.effects.Init;
@@ -221,8 +221,8 @@ final class ShowcaseEffects implements AutoCloseable {
         async = settings.get(DemoSettings.ASYNC);
         int sparks = settings.get(DemoSettings.SPARKS);
         particles = new Particles(device, slots, sparks > 0 ? 256L << 20 : 128L << 20);
-        EffectTextures.register(particles, world.assets());
-        EffectTextures.registerFoxMask(particles, world.assets(), crowd.bodyMesh());
+        particles.assets(world.assets().resources()); // textures and meshes effects name, through the asset cache
+        EffectTextures.preload(world.assets());
         effects = new Effects(scene);
         sync = new EffectSync(effects, particles, new ParticleWorld() { // the terrain, for collision
             @Override
@@ -237,7 +237,6 @@ final class ShowcaseEffects implements AutoCloseable {
             }
         }, null);
         particles.meshes(world.renderer(), 1024); // rocks thrown; skins burning
-        particles.mesh(DemoEffects.ROCK, world.particleRock(), world.particleRockMaterial());
         particles.lights(world.lights(), 256);
         sync.meshes(crowd.sync());
         // Every fox kicks up dust where its feet come down; a tenth of them burn

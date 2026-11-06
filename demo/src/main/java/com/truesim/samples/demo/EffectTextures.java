@@ -1,7 +1,6 @@
 package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
-import com.truesim.engine.render.particles.Particles;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.Generator;
 import com.truesim.scene.assets.mesh.MeshData;
@@ -78,26 +77,16 @@ final class EffectTextures {
     }
 
     /**
-     * Loads the textures through {@code assets} and names them to {@code particles}, uploaded to the assets' textures.
-     * Particles name texture slots themselves until the engine resolves texture assets for techniques (the engine
-     * split plan's 7.5): the upload is that one step by hand, the content an asset.
+     * Holds the textures in {@code assets}' resources and waits until they are on the GPU, so effects naming them draw
+     * with them from their first frame: particles resolve the textures they name through the same resources
+     * ({@code Particles.assets}), the content an asset like any other.
      */
-    static void register(Particles particles, DemoAssets assets) throws InterruptedException {
+    static void preload(DemoAssets assets) throws InterruptedException {
         for (AssetRef<TextureData> ref : java.util.List.of(FLAME, GLOW, EMBER, SMOKE, SMOKE_NORMALS)) {
-            register(particles, assets, ref);
+            assets.resources().hold(ref);
+            assets.await(ref);
         }
-    }
-
-    /** Loads the fox's mask ({@link #foxMask}) from {@code mesh} and names it to {@code particles}. */
-    static void registerFoxMask(Particles particles, DemoAssets assets, MeshData mesh) throws InterruptedException {
-        register(particles, assets, foxMask(mesh));
-    }
-
-    private static void register(Particles particles, DemoAssets assets, AssetRef<TextureData> ref)
-        throws InterruptedException {
-        TextureData texture = assets.await(ref);
-        particles.texture(ref, assets.resources().textures().data(texture.width(), texture.height(),
-            texture.texels()));
+        assets.awaitLoaded();
     }
 
     /** {@code rgba} (floats 0 to 1, four a texel) of a square {@code size} texels a side, as linear 8-bit texels. */

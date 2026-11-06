@@ -12,12 +12,9 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 import com.truesim.engine.graph.ExternalImage;
 import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.GpuTimings;
+import com.truesim.engine.graph.Technique;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
-import com.truesim.engine.scene.CameraSync;
-import com.truesim.engine.settings.EngineSettings;
-import com.truesim.scene.core.CameraLens;
-import com.truesim.scene.core.SceneGraph;
 import com.truesim.engine.render.ClusteredForwardShading;
 import com.truesim.engine.render.ClusteredLights;
 import com.truesim.engine.render.Keys;
@@ -26,12 +23,15 @@ import com.truesim.engine.render.SceneView;
 import com.truesim.engine.render.ViewOptions;
 import com.truesim.engine.render.VisibilityBufferShading;
 import com.truesim.engine.render.shadows.Shadows;
-import com.truesim.scene.core.ShadowSpec;
-import com.truesim.engine.graph.Technique;
+import com.truesim.engine.scene.CameraSync;
+import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.vulkan.Format;
 import com.truesim.engine.vulkan.GpuImage;
 import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.engine.vulkan.VulkanInstance;
+import com.truesim.scene.core.CameraLens;
+import com.truesim.scene.core.SceneGraph;
+import com.truesim.scene.core.ShadowSpec;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -119,7 +119,7 @@ public final class StereoBench {
                     effects.burn(fox, world.renderer()); // and burns all over as it moves
                 }
                 owned.add(effects);
-                effects.debris(world.renderer(), world.particleRock(), world.particleRockMaterial(), 5, -3);
+                effects.assets(world.assets().resources()).debris(world.renderer(), 5, -3);
                 effects.sparkLights(world.lights(), 6.5, -1); // sparks lighting the ground and the rocks
                 graph.add(effects.simulation());
             }
@@ -140,7 +140,7 @@ public final class StereoBench {
                         : new ClusteredForwardShading(world.geometry(), view, color, depth))
                     .add(new ClusteredLights(world.lights(), view));
                 if (effects != null) {
-                    port.add(new com.truesim.engine.render.particles.ParticleDraw(effects.particles(), view, head));
+                    port.add(new com.truesim.effects.particles.ParticleDraw(effects.particles(), view, head));
                 }
                 if (rays || shadows) {
                     Technique part = shared && leftShadows != null ? owner.view(view, leftShadows, 0.064)

@@ -2,6 +2,7 @@
 val engineVersion by extra("0.186.0")
 val sceneVersion by extra("0.66.0")
 val uiVersion by extra("0.10.0")
+val effectsParticlesVersion by extra("0.1.0")
 
 subprojects {
     // LWJGL and mapped GPU memory use native access.

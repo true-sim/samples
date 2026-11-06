@@ -7,10 +7,12 @@ description = "The true-sim demo: a scene to try settings, HDR, dynamic resoluti
 val engineVersion: String by rootProject.extra
 val sceneVersion: String by rootProject.extra
 val uiVersion: String by rootProject.extra
+val effectsParticlesVersion: String by rootProject.extra
 
 dependencies {
     implementation("com.truesim.engine:engine-xr:$engineVersion")
     implementation("com.truesim.engine:engine-scene:$engineVersion")
+    implementation("com.truesim.effects:effects-particles:$effectsParticlesVersion") // the demo's particle effects
     implementation("com.truesim.engine:engine-audio:$engineVersion")
     implementation("com.truesim.scene:scene-meshbuild:$sceneVersion")
     implementation("com.truesim.scene:scene-gltf:$sceneVersion")
