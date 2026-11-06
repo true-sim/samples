@@ -1,18 +1,10 @@
 package com.truesim.samples.demo;
 
-import com.truesim.common.jobs.TaskScheduler;
 import com.truesim.common.math.Maths;
 import com.truesim.common.state.ChangeClock;
-import com.truesim.engine.render.GeometryPool;
 import com.truesim.engine.render.GpuScene;
-import com.truesim.engine.render.Materials;
-import com.truesim.engine.render.RayTracing;
-import com.truesim.engine.render.Textures;
 import com.truesim.engine.scene.Animation;
-import com.truesim.engine.scene.SceneResources;
 import com.truesim.engine.scene.SceneSync;
-import com.truesim.engine.vulkan.FrameSlots;
-import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.scene.animation.AnimationCurve;
 import com.truesim.scene.animation.AnimationEvent;
 import com.truesim.scene.animation.Animator;
@@ -25,24 +17,16 @@ import com.truesim.scene.animation.Joint;
 import com.truesim.scene.animation.LookAt;
 import com.truesim.scene.animation.Rig;
 import com.truesim.scene.animation.TwoBoneIk;
-import com.truesim.scene.assets.AssetCache;
-import com.truesim.scene.assets.AssetRef;
-import com.truesim.scene.assets.PathAssets;
-import com.truesim.scene.assets.PathSource;
 import com.truesim.scene.core.ComponentStore;
 import com.truesim.scene.core.SceneGraph;
-import com.truesim.scene.gltf.Gltf;
-import com.truesim.scene.render.ImageImporter;
 import com.truesim.scene.render.ModelData;
 import com.truesim.scene.render.MorphWeights;
 import com.truesim.scene.render.RenderAssets;
 import com.truesim.scene.render.Renderable;
-import java.nio.file.Path;
-import java.util.List;
 
 /**
- * The Khronos fox ({@code -Dtruesim.demo.character=<glTF-Sample-Assets>/Models/Fox/glTF/Fox.gltf}) on the demo's
- * terrain, through the whole animation path: its clips in a rig, played by an animator, skinned on the GPU. A loop of a
+ * The Khronos fox ({@code --set demo.character=demo://Fox/glTF/Fox.gltf}, with {@link DemoSettings#ASSETS} the
+ * glTF-Sample-Assets' {@code Models} folder) on the demo's terrain, loaded through the shared assets, through the whole animation path: its clips in a rig, played by an animator, skinned on the GPU. A loop of a
  * few seconds: surveying, cross-fading into a walk that speeds up into a run (a blend space), and back; all the while its
  * head looks at a circling light (a look-at shared down its neck and spine), its tail follows a wagging point (a FABRIK
  * chain with limits), and its four feet stand on the uneven ground (foot placement on both pairs of legs). Its walk and
@@ -65,10 +49,6 @@ final class DemoCharacter implements AutoCloseable {
     private static final double[] WALK_STEPS = {0.5, 0.692, 0.017, 0.375};
     private static final double[] RUN_STEPS = {1.0, 1.092, 0.525, 0.417};
 
-    private final TaskScheduler tasks = new TaskScheduler();
-    private final AssetCache cache = new AssetCache(tasks);
-    private final Textures textures;
-    private final SceneResources resources;
     private final SceneGraph scene = new SceneGraph(new ChangeClock());
     private final ComponentStore<Renderable> renderables = scene.components().store(Renderable.TYPE);
     private final Animators animators; // run by the animation plugin, in ANIMATE
@@ -88,32 +68,20 @@ final class DemoCharacter implements AutoCloseable {
     private boolean moving;
 
     /**
-     * The fox from {@code file}, at world ({@code x}, {@code z}) on the terrain, drawn into {@code gpu}; traced by
-     * {@code rayTracing}, if not null; its animator run by {@code animation}.
+     * The fox of model {@code model} (an asset path) from {@code assets}, at world ({@code x}, {@code z}) on the
+     * terrain, drawn into {@code gpu} (traced where the assets' resources trace); its animator run by {@code animation}.
      */
-    DemoCharacter(VulkanDevice device, FrameSlots slots, GeometryPool pool, Materials materials, GpuScene gpu,
-        Path file, double x, double z,
-        RayTracing rayTracing, Animation animation) throws InterruptedException {
+    DemoCharacter(DemoAssets assets, GpuScene gpu, String model, double x, double z, Animation animation)
+        throws InterruptedException {
         animators = animation.animators(scene);
         this.x = x;
         this.z = z;
-        textures = new Textures(device, slots);
-        resources = new SceneResources(cache, pool, materials, textures);
-        if (rayTracing != null) {
-            resources.rayTracing(rayTracing); // its meshes and skinned copies traced
-        }
-        sync = new SceneSync(resources, scene, gpu);
-        PathAssets paths = new PathAssets(cache);
-        paths.mounts().add("character", PathSource.folder(file.getParent()));
-        new Gltf(paths).register();
-        for (String extension : List.of("png", "jpg", "jpeg")) {
-            paths.importers().add(RenderAssets.TEXTURE, extension, ImageImporter.INSTANCE);
-        }
-        ModelData model = await(paths.ref(RenderAssets.MODEL, "character://" + file.getFileName()));
+        sync = new SceneSync(assets.resources(), scene, gpu);
+        ModelData fox = assets.await(assets.ref(RenderAssets.MODEL, model));
         // The fox is about 80 units tall: a small dog's size, facing the camera.
         holder = scene.create();
         scene.setScale(holder, 0.012, 0.012, 0.012);
-        long[] nodes = model.spawn(scene, holder);
+        long[] nodes = fox.spawn(scene, holder);
         for (long node : nodes) {
             if (body == 0 && renderables.has(node) && renderables.get(node).skin() != null) {
                 body = node;
@@ -121,10 +89,10 @@ final class DemoCharacter implements AutoCloseable {
         }
         animators.morphSink((node, weights, offset, count) -> MorphWeights.write(scene, node, weights, offset, count));
 
-        Rig.Builder r = Rig.builder(model.skeleton());
-        survey = r.clip(await(model.animation("Survey")));
-        Clip walk = r.clip(await(model.animation("Walk")));
-        Clip run = r.clip(await(model.animation("Run")));
+        Rig.Builder r = Rig.builder(fox.skeleton());
+        survey = r.clip(assets.await(fox.animation("Survey")));
+        Clip walk = r.clip(assets.await(fox.animation("Walk")));
+        Clip run = r.clip(assets.await(fox.animation("Run")));
         for (int f = 0; f < 4; f++) {
             feet[f] = r.joint(FOOT_JOINTS[f]);
         }
@@ -195,28 +163,11 @@ final class DemoCharacter implements AutoCloseable {
         return feet;
     }
 
-    private <T> T await(AssetRef<T> ref) throws InterruptedException {
-        cache.acquire(ref);
-        long deadline = System.nanoTime() + 60_000_000_000L;
-        while (cache.get(ref) == null && cache.failure(ref) == null) {
-            if (System.nanoTime() > deadline) {
-                throw new IllegalStateException("Loading " + ref + " took too long");
-            }
-            Thread.sleep(1);
-            tasks.drainCompleted();
-        }
-        if (cache.failure(ref) != null) {
-            throw new IllegalStateException("Could not load " + ref, cache.failure(ref));
-        }
-        return cache.get(ref);
-    }
-
     /**
      * The fox at {@code seconds}, looking at world ({@code lx}, {@code ly}, {@code lz}): what plays and where, in UPDATE;
      * the animation plugin poses it in ANIMATE, {@link #draw} draws it.
      */
     void update(double seconds, double lx, double ly, double lz) {
-        tasks.drainCompleted(); // meshes and textures arriving
         double t = seconds % LOOP;
         // Surveying, then walking faster into a run, then surveying again: cross-fades between.
         boolean shouldMove = t >= 3 && t < 10;
@@ -241,16 +192,12 @@ final class DemoCharacter implements AutoCloseable {
 
     /** Draws the fox as animation posed it: after the frame's ANIMATE (the animation plugin's), before it records. */
     void draw() {
-        tasks.drainCompleted(); // meshes and textures arriving
+        scene.update();
         sync.update();
     }
 
     @Override
     public void close() {
         sync.close();
-        resources.close();
-        cache.close();
-        tasks.close();
-        textures.close();
     }
 }

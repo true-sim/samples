@@ -1,0 +1,29 @@
+name: Release
+
+# A tag v* releases the samples as programs: each module's distribution (bin scripts and libraries) attached to the
+# GitHub release. Nothing is published as a library.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: read # build-logic plugins and the engine, scene and ui libraries from GitHub Packages
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 27
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew assemble -Pversion=${GITHUB_REF_NAME#v}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes */build/distributions/*.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -14,6 +14,10 @@ import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.GpuTimings;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
+import com.truesim.engine.scene.CameraSync;
+import com.truesim.engine.settings.EngineSettings;
+import com.truesim.scene.core.CameraLens;
+import com.truesim.scene.core.SceneGraph;
 import com.truesim.engine.render.ClusteredForwardShading;
 import com.truesim.engine.render.ClusteredLights;
 import com.truesim.engine.render.Keys;
@@ -37,24 +41,25 @@ import java.util.Map;
 /**
  * Where a stereo frame's GPU time goes: the demo's scene from two eyes 64 mm apart, each a view of its own at a Quest
  * 3's eye size, offscreen, passes timed and averaged over many frames, then grouped by what they do (which work each
- * eye repeats). {@code ./gradlew :engine-demo:stereoBench}; {@code --args="visibility"} shades through the visibility
+ * eye repeats). {@code ./gradlew :samples-demo:stereoBench}; {@code --args="visibility"} shades through the visibility
  * buffer, {@code shared} gives both eyes one set of shadow cascades, {@code rebuild} times what rebuilds cost the
  * render thread, {@code capture} writes frame 100 for RenderDoc (launched through {@code renderdoccmd capture}), {@code noshadows}
  * leaves the sun's cascades out, {@code rays} traces the sun's shadows instead (inline ray queries from visibility buffer
  * shading, on devices with ray tracing): every mesh has a bottom level, skinned copies' refitted each frame they move
- * (the pass "bottom level refits"). With {@code -Peffect=x,y,z} the demo's effects play there, drawn in both eyes as a
+ * (the pass "bottom level refits"). With {@code -Peffect=x,y,z} ({@code --set demo.effect=x,y,z}) the demo's effects play there, drawn in both eyes as a
  * pair: one particle sort for both, billboards facing their center.
  */
 public final class StereoBench {
 
     private static final int WIDTH = 2064;
     private static final int HEIGHT = 2208;
-    private static final int FRAMES = Integer.getInteger("truesim.demo.frames", 300);
 
     private StereoBench() {
     }
 
     public static void main(String[] args) {
+        EngineSettings settings = DemoSettings.standalone(args); // --set demo.frames=780 and the others
+        int frames = DemoSettings.or(settings.get(DemoSettings.FRAMES), 300);
         boolean visibility = List.of(args).contains("visibility");
         boolean shared = List.of(args).contains("shared"); // one set of cascades for both eyes
         boolean rebuilds = List.of(args).contains("rebuild"); // what a rebuild costs the render thread
@@ -69,15 +74,23 @@ public final class StereoBench {
                  .build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2).timings(true);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), color, depth, rays)) {
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), color, depth, settings, rays,
+                 null)) {
             if (rays && world.rayTracing() == null) {
                 throw new IllegalStateException("The device has no ray tracing");
             }
             int usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             List<AutoCloseable> owned = new ArrayList<>();
             List<GpuImage> targets = new ArrayList<>();
+            // The cameras are nodes of the world: the head, the eyes its children 64 mm apart; the renderer's cameras
+            // follow them (CameraSync). The head's camera is the eyes' center: particles sort once for both, facing it
             Camera[] eyes = {new Camera(), new Camera()};
-            Camera head = new Camera(); // the eyes' center: particles sort once for both and face it
+            Camera head = new Camera();
+            SceneGraph scene = world.scene();
+            long headNode = world.cameraNode(Math.PI / 2, 0.05);
+            long[] eyeNodes = new long[2];
+            CameraSync[] eyeSyncs = new CameraSync[2];
+            CameraSync headSync = new CameraSync(scene, headNode, head);
             List<ViewPort> ports = new ArrayList<>();
             Capture png = null; // the left eye's PNGs, with -Ppng
             if (rebuilds) {
@@ -88,25 +101,25 @@ public final class StereoBench {
             // fitted to the left eye, its margin the distance between the eyes), or none
             Shadows owner = new Shadows(world.geometry(), world.lights()).rayTracing(rays ? world.rayTracing() : null);
             owned.add(owner);
-            world.lights().shadow(0, rays ? ShadowSpec.rayTraced() : shadows ? DemoScene.SUN_SHADOWS : ShadowSpec.NONE);
+            world.sunShadows(rays ? ShadowSpec.rayTraced() : shadows ? DemoScene.SUN_SHADOWS : ShadowSpec.NONE);
             Technique leftShadows = null;
-            // -Ptruesim.demo.effect=x,y,z: the demo's effects there (g+h: h above the ground); with -Pcharacter the
+            // --set demo.effect=x,y,z (-Peffect): the demo's effects there (g+h: h above the ground); with a fox the
             // fox's feet kick up dust
-            String effect = System.getProperty("truesim.demo.effect");
+            String effect = settings.get(DemoSettings.EFFECT);
             DemoEffects effects = null;
-            if (effect != null) {
+            if (!effect.isEmpty()) {
                 String[] v = effect.split(",");
                 double fx = Double.parseDouble(v[0]);
                 double fz = Double.parseDouble(v[2]);
                 DemoCharacter fox = world.character();
-                effects = fox == null ? new DemoEffects(device, graph.frameSlots(), fx, height(v[1], fx, fz), fz)
-                    : new DemoEffects(device, graph.frameSlots(), fox.scene(), fx, height(v[1], fx, fz), fz);
+                effects = new DemoEffects(device, graph.frameSlots(), fox == null ? world.scene() : fox.scene(), fx,
+                    height(v[1], fx, fz), fz);
                 if (fox != null) {
                     effects.dust(fox); // the fox kicks up dust; its survey flickers the torch
                     effects.burn(fox, world.renderer()); // and burns all over as it moves
                 }
                 owned.add(effects);
-                effects.debris(world.renderer(), world.rock(), world.rockMaterial(), 5, -3); // rocks casting shadows
+                effects.debris(world.renderer(), world.particleRock(), world.particleRockMaterial(), 5, -3);
                 effects.sparkLights(world.lights(), 6.5, -1); // sparks lighting the ground and the rocks
                 graph.add(effects.simulation());
             }
@@ -117,6 +130,10 @@ public final class StereoBench {
                 targets.add(target);
                 ViewPort port = graph.addView(e == 0 ? "left" : "right").size(WIDTH, HEIGHT);
                 ports.add(port);
+                eyeNodes[e] = world.cameraNode(Math.PI / 2, 0.05);
+                scene.setParent(eyeNodes[e], headNode);
+                scene.setTranslation(eyeNodes[e], e == 0 ? -0.032 : 0.032, 0, 0);
+                eyeSyncs[e] = new CameraSync(scene, eyeNodes[e], eyes[e], port);
                 SceneView view = world.geometry().createView(port, eyes[e], ViewOptions.of(1 << 14, 1 << 22)
                     .withOcclusion(true)).set(1, MeshletRenderer.MODE_LIT);
                 port.add(visibility ? new VisibilityBufferShading(world.geometry(), view, color, depth)
@@ -131,7 +148,7 @@ public final class StereoBench {
                     leftShadows = leftShadows == null ? part : leftShadows;
                     port.add(part);
                 }
-                if (e == 0 && System.getProperty("truesim.demo.png") != null) {
+                if (e == 0 && !settings.get(DemoSettings.PNG).isEmpty()) {
                     png = new Capture(device, port); // the left eye as a window shows it: tone mapped, sRGB
                     owned.add(png);
                 } else {
@@ -140,8 +157,8 @@ public final class StereoBench {
                             .set(target.handle(), target.view()));
                 }
             }
-            String detail = System.getProperty("truesim.demo.casterDetail");
-            if (detail != null) {
+            String detail = settings.get(DemoSettings.CASTER_DETAIL);
+            if (!detail.isEmpty()) {
                 graph.settings().set(com.truesim.engine.render.shadows.ShadowSettings.CASTER_DETAIL,
                     Float.parseFloat(detail));
             }
@@ -150,29 +167,29 @@ public final class StereoBench {
             if (capture && renderDoc == null) {
                 System.out.println("RenderDoc is not loaded: launch with renderdoccmd capture");
             }
-            for (int frame = 0; frame < FRAMES; frame++) {
-                world.update(frame / 72.0);
-                // -Ptruesim.demo.eye=x,y,z,tx,ty,tz: a camera of its own, looking from (x, y, z) at (tx, ty, tz)
-                String eye = System.getProperty("truesim.demo.eye");
-                for (int e = 0; e < 2; e++) {
-                    double offset = (e == 0 ? -0.032 : 0.032);
-                    if (eye == null) {
-                        eyes[e].position(30 + offset, 6, 30).set(-0.7, -0.15, -0.7, 0, 1, 0, Math.PI / 2, WIDTH,
-                            HEIGHT, 0.05);
-                    } else {
-                        String[] v = eye.split(",");
-                        double ex = Double.parseDouble(v[0]);
-                        double ez = Double.parseDouble(v[2]);
-                        double ey = height(v[1], ex, ez);
-                        double tx = Double.parseDouble(v[3]);
-                        double tz = Double.parseDouble(v[5]);
-                        eyes[e].position(ex + offset, ey, ez).set(tx - ex, height(v[4], tx, tz) - ey, tz - ez, 0, 1,
-                            0, Math.PI / 3, WIDTH, HEIGHT, 0.05);
-                    }
+            // --set demo.eye=x,y,z,tx,ty,tz: a camera of its own, looking from (x, y, z) at (tx, ty, tz)
+            String eye = settings.get(DemoSettings.EYE);
+            if (eye.isEmpty()) {
+                DemoScene.look(scene, headNode, 30, 6, 30, -0.7, -0.15, -0.7);
+            } else {
+                String[] v = eye.split(",");
+                double ex = Double.parseDouble(v[0]);
+                double ez = Double.parseDouble(v[2]);
+                double ey = height(v[1], ex, ez);
+                double tx = Double.parseDouble(v[3]);
+                double tz = Double.parseDouble(v[5]);
+                DemoScene.look(scene, headNode, ex, ey, ez, tx - ex, height(v[4], tx, tz) - ey, tz - ez);
+                for (long node : List.of(headNode, eyeNodes[0], eyeNodes[1])) {
+                    scene.components().set(node, CameraLens.TYPE, CameraLens.perspective(Math.PI / 3, 0.05));
                 }
-                head.position(0.5 * (eyes[0].position(0) + eyes[1].position(0)),
-                    0.5 * (eyes[0].position(1) + eyes[1].position(1)),
-                    0.5 * (eyes[0].position(2) + eyes[1].position(2)));
+            }
+            String pngFrames = settings.get(DemoSettings.PNG_FRAMES);
+            String pngFile = settings.get(DemoSettings.PNG);
+            for (int frame = 0; frame < frames; frame++) {
+                world.update(frame / 72.0); // the scene updated and drawn: the camera nodes' places final
+                headSync.update(WIDTH, HEIGHT);
+                eyeSyncs[0].update();
+                eyeSyncs[1].update();
                 int kind = 0;
                 if (rebuilds && frame > 30 && frame % 20 == 0) {
                     kind = frame % 40 == 0 ? 1 : 2;
@@ -195,10 +212,8 @@ public final class StereoBench {
                 }
                 graph.submit(0, 0);
                 world.recorded();
-                // -Ptruesim.demo.pngFrames=60,180: the left eye of those frames too, next to the png named
-                String pngFrames = System.getProperty("truesim.demo.pngFrames");
-                String pngFile = System.getProperty("truesim.demo.png");
-                if (pngFrames != null && pngFile != null
+                // --set demo.pngFrames=60,180: the left eye of those frames too, next to the png named
+                if (!pngFrames.isEmpty() && !pngFile.isEmpty()
                     && List.of(pngFrames.split(",")).contains(Integer.toString(frame))) {
                     device.waitIdle();
                     java.nio.file.Path file = java.nio.file.Path.of(pngFile.replace(".png", "_" + frame + ".png"));
@@ -233,9 +248,8 @@ public final class StereoBench {
                 System.out.println(world.crowdReport());
             }
             if (png != null) {
-                String file = System.getProperty("truesim.demo.png");
-                png.write(java.nio.file.Path.of(file));
-                System.out.println("Left eye written to " + file);
+                png.write(java.nio.file.Path.of(pngFile));
+                System.out.println("Left eye written to " + pngFile);
             }
             if (rebuilds) {
                 System.out.printf(Locale.ROOT, "CPU ms per frame, beginFrame and submit: ordinary %.3f, rebuilt as it "

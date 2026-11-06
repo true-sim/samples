@@ -47,6 +47,8 @@ import com.truesim.engine.render.VisibilityBufferShading;
 import com.truesim.engine.render.ChosenTransparency;
 import com.truesim.engine.render.shadows.Shadows;
 import com.truesim.engine.scene.Animation;
+import com.truesim.engine.scene.Assets;
+import com.truesim.engine.scene.CameraSync;
 import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.vulkan.PresentMode;
 import com.truesim.engine.xr.Eye;
@@ -61,13 +63,16 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The engine's demo: rolling terrain with rocks, the sun with cascaded shadows and colored lights, to try what the
- * engine does live. Run with {@code ./gradlew :engine-demo:run}; {@code --args="--vr"} adds a headset (OpenXR, e.g.
+ * The true-sim demo: rolling terrain with rocks, the sun with cascaded shadows and colored lights, to try what the
+ * engine does live. Run with {@code ./gradlew :samples-demo:run}; {@code --args="--vr"} adds a headset (OpenXR, e.g.
  * SteamVR), {@code --args="--validation"} turns Vulkan validation on. Settings are saved to
  * {@code ~/.truesim/demo.properties} on exit (and with F5) and read back at start. The keys are printed at start.
  *
  * <p>An {@link Application} on the engine's plugins: {@link Desktop} for windows and input, {@link Rendering} for the
- * device, graph and presenter, and with {@code --vr} {@link Xr} if a headset is there, which then paces frames.
+ * device, graph and presenter, {@link Assets} for everything it loads ({@link DemoAssets}), and with {@code --vr}
+ * {@link Xr} if a headset is there, which then paces frames. The world is a scene ({@link DemoScene}); the cameras
+ * are camera nodes of it (with a {@code CameraLens}), followed by the renderer's cameras ({@link CameraSync}), and the
+ * desktop camera's node also listens and carries the car's engine sound.
  */
 public final class Demo implements Application, PlatformListener {
 
@@ -116,7 +121,10 @@ public final class Demo implements Application, PlatformListener {
     private DemoScene world;
     private ViewPort main;
     private SceneView mainView;
-    private final Camera camera = new Camera();
+    private final Camera camera = new Camera(); // follows the camera node (cameraSync)
+    private long cameraNode;
+    private CameraSync cameraSync;
+    private DemoAssets assets;
     private KnockingRocks knocks;
     private FoxFootsteps footsteps;
     private final List<SceneView> shaded = new ArrayList<>(); // every view drawing the scene: shading swaps in all
@@ -128,7 +136,9 @@ public final class Demo implements Application, PlatformListener {
     // The second window and its view, from above.
     private Window mapWindow;
     private ViewPort map;
-    private final Camera mapCamera = new Camera();
+    private final Camera mapCamera = new Camera(); // follows the map's camera node
+    private long mapNode;
+    private CameraSync mapSync;
     // VR.
     private Headset headset;
     private AudioOverlay overlay;
@@ -158,8 +168,8 @@ public final class Demo implements Application, PlatformListener {
     @Override
     public void configure(AppConfig app) {
         app.id("truesim-demo").name("true-sim demo").saveSettings(settingsFile)
-            .use(new Desktop(), new Input().add(DemoActions.DEMO), new Rendering().validation(validation), new Audio(),
-                new Animation());
+            .use(new Desktop(), new Input().add(DemoActions.DEMO), new Rendering().validation(validation), new Assets(),
+                new Audio(), new Animation());
         if (vr) {
             app.use(Xr.ifAvailable());
         }
@@ -186,11 +196,16 @@ public final class Demo implements Application, PlatformListener {
         Rendering rendering = engine.get(Rendering.KEY);
         graph = rendering.graph().timings(true);
         presenter = rendering.presenter().outputTransform(new DisplayTransform());
-        world = new DemoScene(rendering.device(), graph.frameSlots(), COLOR, DEPTH, engine.get(Animation.KEY));
+        DemoSettings.register(engine.registry());
+        assets = DemoAssets.of(engine.get(Assets.KEY), engine.tasks(), settings);
+        world = new DemoScene(assets, settings, rendering.device(), graph.frameSlots(), COLOR, DEPTH,
+            engine.get(Animation.KEY));
+        cameraNode = world.cameraNode(70 * Math.PI / 180, 0.1);
         System.out.println("GPU: " + rendering.device().gpu().name() + (validation ? ", validation on" : ""));
         window = platform.createWindow(WindowOptions.of("true-sim demo", 1600, 900), settings.scoped("main"));
         main = graph.addView("main");
         mainView = sceneView(main, camera);
+        cameraSync = new CameraSync(world.scene(), cameraNode, camera, main);
         if (List.of(args).contains("--probe")) {
             main.add(new Probe());
         }
@@ -200,13 +215,13 @@ public final class Demo implements Application, PlatformListener {
             System.out.println("Headset: " + headset);
             startHeadset();
         }
-        knocks = engine.find(Audio.KEY).map(audio -> new KnockingRocks(audio, world, engine.tasks(), eye, yaw,
+        knocks = engine.find(Audio.KEY).map(audio -> new KnockingRocks(audio, world, cameraNode, eye, yaw,
             headset == null ? null : (p, o) -> headset.running() && headset.input().head(p, o))).orElse(null);
         if (headset != null) { // Meta's runtime names the headset's audio device; SteamVR makes it the default
             engine.find(Audio.KEY).ifPresent(audio -> audio.headsetDevice(headset.audioOutputDevice()));
         }
         footsteps = world.character() == null ? null : engine.find(Audio.KEY)
-            .map(audio -> new FoxFootsteps(audio, world.character(), engine.tasks())).orElse(null);
+            .map(audio -> new FoxFootsteps(audio, world.character(), assets)).orElse(null);
         if (List.of(args).contains("--audio-overlay")) { // the audio debug overlay, printed every 5 s
             overlay = engine.find(Audio.KEY).map(audio -> new AudioOverlay(audio.renderer(), audio.output())
                 .listeners(knocks == null ? null : knocks.sounds())).orElse(null);
@@ -227,7 +242,7 @@ public final class Demo implements Application, PlatformListener {
         move(dt);
         world.update((now - started) / 1e9);
         if (knocks != null) {
-            knocks.update(dt, eye, yaw);
+            knocks.update(dt, eye);
         }
         if (automatic != null) {
             automatic.update();
@@ -252,6 +267,10 @@ public final class Demo implements Application, PlatformListener {
     @Override
     public void lateUpdate(Frame frame) {
         world.sync();
+        cameraSync.update(); // the camera nodes placed in update, final now
+        if (mapSync != null && mapWindow != null) {
+            mapSync.update();
+        }
         if (footsteps != null) {
             footsteps.update(eye, yaw);
         }
@@ -351,13 +370,14 @@ public final class Demo implements Application, PlatformListener {
         eye[1] += speed * (forward * fy + up);
         eye[2] += speed * (forward * fz - right * rz);
         eye[1] = Math.max(eye[1], DemoMeshes.height(eye[0], eye[2]) + 0.5);
-        int width = Math.max(1, window.pixelWidth());
-        int height = Math.max(1, window.pixelHeight());
-        camera.position(eye[0], eye[1], eye[2]).set(fx, fy, fz, 0, 1, 0, (70 * Math.PI / 180), width, height, 0.1);
-        if (map != null) {
-            mapCamera.position(eye[0], eye[1] + 60, eye[2]).set(0, -1, 0, Maths.sin(yaw), 0, Maths.cos(yaw),
-                (60 * Math.PI / 180), Math.max(1, mapWindow.pixelWidth()), Math.max(1, mapWindow.pixelHeight()), 1);
+        place(cameraNode, eye[0], eye[1], eye[2], yaw, pitch);
+        if (map != null) { // above, looking down, the camera's heading up
+            place(mapNode, eye[0], eye[1] + 60, eye[2], yaw, -Math.PI / 2);
         }
+    }
+
+    private void place(long node, double x, double y, double z, double yaw, double pitch) {
+        DemoScene.place(world.scene(), node, x, y, z, yaw, pitch);
     }
 
     /** Walks with the walk action, buzzes a controller when its trigger goes down, prints profile changes. */
@@ -553,6 +573,8 @@ public final class Demo implements Application, PlatformListener {
         if (map == null) {
             map = graph.addView("map");
             sceneView(map, mapCamera);
+            mapNode = world.cameraNode(60 * Math.PI / 180, 1);
+            mapSync = new CameraSync(world.scene(), mapNode, mapCamera, map);
         }
         map.enabled(true);
         presenter.present(map, Keys.SCENE_COLOR, mapWindow, settings.scoped("map"));

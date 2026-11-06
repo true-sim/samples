@@ -55,7 +55,7 @@ final class GpuBench implements AutoCloseable {
     static GpuBench open(int width, int height) {
         VulkanInstance instance;
         try {
-            instance = VulkanInstance.builder().applicationName("engine-bench").validation(false).surfaces(false)
+            instance = VulkanInstance.builder().applicationName("samples-bench").validation(false).surfaces(false)
                 .build();
         } catch (VulkanException | UnsatisfiedLinkError e) {
             return null;

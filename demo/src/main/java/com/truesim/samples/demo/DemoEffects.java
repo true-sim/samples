@@ -98,10 +98,8 @@ final class DemoEffects implements AutoCloseable {
             .render(Renderer.billboard(Renderer.Facing.AXIS).additive().set("soft", 0.05f)))
         .build();
 
-    /** The rock mesh and material debris draws: the world's own, registered as {@link #debris} says. */
-    static final com.truesim.scene.assets.AssetRef<?> ROCK = com.truesim.scene.assets.AssetRef.of(
-        com.truesim.scene.assets.AssetType.of("demo.mesh", String.class, s -> 0),
-        new com.truesim.scene.assets.AssetId(0, 1));
+    /** The rock mesh debris draws: the world's rock asset, its GPU slot registered as {@link #debris} says. */
+    static final com.truesim.scene.assets.AssetRef<?> ROCK = DemoScene.ROCK;
 
     /**
      * Debris: every four seconds a burst of rocks thrown up, tumbling as they fly and roll, bouncing on the terrain and

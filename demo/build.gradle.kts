@@ -34,11 +34,26 @@ application {
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
+// The samples' options are settings (DemoSettings), given as --set name=value after the program's own arguments.
+// The -P properties below become those; a model named by file (-Pcharacter=<path to Fox.gltf>) becomes its folder
+// mounted as demo:// and the model's asset path in it. Providers, not args: --args replaces the task's args.
+fun settingsOf(vararg names: String): List<String> = names.flatMap { name ->
+    providers.gradleProperty(name).orNull?.let { value ->
+        if (name == "character" || name == "crowd") {
+            val model = file(value)
+            listOf("--set", "demo.assets=${model.parentFile.absolutePath}", "--set", "demo.$name=demo://${model.name}")
+        } else {
+            listOf("--set", "demo.$name=$value")
+        }
+    } ?: listOf()
+}
+
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC") // generational ZGC: pauses the audio queue covers
     // -Pcharacter=<glTF-Sample-Assets>/Models/Fox/glTF/Fox.gltf: an animated fox among the rocks
-    providers.gradleProperty("character").orNull?.let { systemProperty("truesim.demo.character", it) }
+    val settings = settingsOf("character", "rocks", "lights")
+    argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
 // A demo to run, not a library: nothing to cover.
@@ -53,22 +68,13 @@ tasks.register<JavaExec>("stereoBench") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass = "com.truesim.samples.demo.StereoBench"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
-    providers.gradleProperty("rocks").orNull?.let { systemProperty("truesim.demo.rocks", it) }
-    providers.gradleProperty("png").orNull?.let { systemProperty("truesim.demo.png", it) }
-    providers.gradleProperty("casterDetail").orNull?.let { systemProperty("truesim.demo.casterDetail", it) }
-    providers.gradleProperty("character").orNull?.let { systemProperty("truesim.demo.character", it) }
-    providers.gradleProperty("eye").orNull?.let { systemProperty("truesim.demo.eye", it) }
-    providers.gradleProperty("pngFrames").orNull?.let { systemProperty("truesim.demo.pngFrames", it) }
-    providers.gradleProperty("frames").orNull?.let { systemProperty("truesim.demo.frames", it) }
-    // -Peffect=x,y,z: the demo's particle effects at a point (g+h: h above the ground)
-    providers.gradleProperty("effect").orNull?.let { systemProperty("truesim.demo.effect", it) }
-    // -Plights=1024: that many point lights, the circling six and the rest scattered near the middle
-    providers.gradleProperty("lights").orNull?.let { systemProperty("truesim.demo.lights", it) }
-    // -Pfoxes=1000 -Pcrowd=<path to Fox.gltf> [-PfoxLod=true]: a crowd of animated foxes, what animating it costs
-    providers.gradleProperty("foxes").orNull?.let { systemProperty("truesim.demo.foxes", it) }
-    providers.gradleProperty("crowd").orNull?.let { systemProperty("truesim.demo.crowd", it) }
-    providers.gradleProperty("foxLod").orNull?.let { systemProperty("truesim.demo.foxLod", it) }
-    providers.gradleProperty("rebuildEvery").orNull?.let { systemProperty("truesim.demo.rebuildEvery", it) }
+    // -Peffect=x,y,z: the demo's particle effects at a point (g+h: h above the ground); -Plights=1024: that many point
+    // lights, the circling six and the rest scattered near the middle; -Pfoxes=1000 -Pcrowd=<path to Fox.gltf>
+    // [-PfoxLod=true]: a crowd of animated foxes, what animating it costs; -Peye, -Ppng, -PpngFrames, -Pframes,
+    // -PcasterDetail, -Procks, -PrebuildEvery: the settings demo.eye and the others
+    val settings = settingsOf("rocks", "png", "casterDetail", "character", "eye", "pngFrames", "frames", "effect",
+        "lights", "foxes", "crowd", "foxLod", "rebuildEvery")
+    argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
 // Hitches while content streams (StreamBench): ./gradlew :samples-demo:streamBench
@@ -99,10 +105,11 @@ tasks.register<JavaExec>("showcase") {
     mainClass = "com.truesim.samples.demo.Showcase"
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-Xmx4g")
-    for (name in listOf("crowd", "character", "foxes", "rocks", "camera", "size", "frames", "first", "every", "out",
-        "stills", "exposure", "torches", "sparks", "glass", "async")) {
-        providers.gradleProperty(name).orNull?.let { systemProperty("truesim.demo.$name", it) }
-    }
+    val settings = settingsOf("crowd", "character", "foxes", "rocks", "camera", "size", "frames", "first", "every",
+        "out", "stills", "exposure", "torches", "sparks", "async")
+    argumentProviders.add(CommandLineArgumentProvider { settings })
+    // -Pglass=true: windows before the bonfire; a system property, read as the effects' constants are made
+    providers.gradleProperty("glass").orNull?.let { systemProperty("truesim.demo.glass", it) }
 }
 
 // The UI gallery (UiGallery): ./gradlew :samples-demo:uiGallery -- every gallery of the UI in a window, a 3D scene with
@@ -122,4 +129,14 @@ tasks.register<JavaExec>("uiGallery") {
     providers.gradleProperty("shots").orNull?.let { args("--set", "gallery.shots=$it") }
     // -Procks=n: rocks in the 3D scene (the setting gallery.rocks)
     providers.gradleProperty("rocks").orNull?.let { args("--set", "gallery.rocks=$it") }
+}
+
+// Soak tests (@Tag("soak"): the stream benchmark's memory, the gallery's mouse sweep) take long on CI's software GPU:
+// pull requests leave them out, the nightly and manual runs take them in (-Psoak=true).
+tasks.test {
+    useJUnitPlatform {
+        if (providers.gradleProperty("soak").orNull != "true") {
+            excludeTags("soak")
+        }
+    }
 }

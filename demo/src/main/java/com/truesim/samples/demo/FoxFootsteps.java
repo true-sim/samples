@@ -1,11 +1,9 @@
 package com.truesim.samples.demo;
 
-import com.truesim.common.jobs.TaskScheduler;
 import com.truesim.common.math.Maths;
 import com.truesim.common.math.random.Hash;
 import com.truesim.engine.audio.Audio;
 import com.truesim.engine.audio.AudioBindings;
-import com.truesim.scene.assets.AssetCache;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.Generator;
 import com.truesim.scene.audio.Attenuation;
@@ -66,18 +64,15 @@ final class FoxFootsteps implements AutoCloseable {
         return AudioClip.builder(RATE, 1).floats(s).build();
     };
 
-    private final AssetCache cache;
-    private final TaskScheduler tasks;
     private final Sounds sounds;
     private final AudioBindings bindings;
     private final long listener;
     private final DemoCharacter fox;
 
-    FoxFootsteps(Audio audio, DemoCharacter fox, TaskScheduler tasks) {
+    /** The fox's steps, through the shared {@code assets}, heard by a listener following the camera. */
+    FoxFootsteps(Audio audio, DemoCharacter fox, DemoAssets assets) {
         this.fox = fox;
-        this.tasks = tasks;
-        cache = new AssetCache(tasks);
-        sounds = audio.assets(cache).sounds(fox.scene());
+        sounds = audio.assets(assets.cache()).sounds(fox.scene());
         listener = fox.scene().create();
         sounds.listeners().device(listener);
         Switch<Surface> steps = Switch.on(SURFACE);
@@ -105,7 +100,6 @@ final class FoxFootsteps implements AutoCloseable {
 
     /** The listener at the camera; the bindings' sounds. After the fox's update. */
     void update(double[] eye, double yaw) {
-        tasks.drainCompleted();
         double half = (yaw + Math.PI) / 2;
         fox.scene().setLocal(listener, eye[0], eye[1], eye[2], 0, Maths.sin(half), 0, Maths.cos(half), 1, 1, 1);
         bindings.update();
@@ -118,6 +112,6 @@ final class FoxFootsteps implements AutoCloseable {
 
     @Override
     public void close() {
-        cache.close();
+        // the shared assets outlive it
     }
 }

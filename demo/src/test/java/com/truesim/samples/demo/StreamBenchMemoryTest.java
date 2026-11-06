@@ -8,6 +8,7 @@ import com.truesim.engine.vulkan.VulkanException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * the Java heap and the GPU's stop growing once the range is full. Before the fix, each cell left about 220 KB of
  * meshes' arenas behind (6 GB over five minutes of a fast flight).
  */
+@Tag("soak") // memory over thousands of streamed cells: nightly and on demand (./gradlew build -Psoak=true)
 class StreamBenchMemoryTest {
 
     @AfterEach

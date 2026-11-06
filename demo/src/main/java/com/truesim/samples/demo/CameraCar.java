@@ -4,7 +4,7 @@ import com.truesim.engine.audio.Audio;
 import com.truesim.engine.audio.dsp.Vehicles;
 import com.truesim.scene.audio.Patch;
 import com.truesim.scene.audio.Sound;
-import com.truesim.scene.audio.SoundInstance;
+import com.truesim.scene.audio.SoundEmitter;
 import com.truesim.scene.audio.Sounds;
 
 /**
@@ -17,16 +17,21 @@ final class CameraCar {
     /** Metres a second per 1,000 rpm in each gear. */
     private static final double[] GEARS = {2.2, 3.6, 5.2, 7.0, 9.0};
 
-    private final SoundInstance engine;
+    private final Sounds sounds;
+    private final long node;
     private final double[] last = new double[3];
     private boolean started;
     private int gear;
     private double speed;
 
-    CameraCar(Audio audio, Sounds sounds) {
+    /** The car on {@code cameraNode}: a looping engine sound it emits ({@link SoundEmitter}), in {@code sounds}. */
+    CameraCar(Audio audio, Sounds sounds, long cameraNode) {
+        this.sounds = sounds;
+        this.node = cameraNode;
         audio.patches().register(Vehicles.v8());
-        engine = sounds.play(Sound.builder().root(Patch.named("v8", Vehicles.RPM, Vehicles.LOAD, Vehicles.SHIFT))
-            .volume(com.truesim.scene.audio.Range.db(-6, -6)).loop().build());
+        sounds.scene().components().set(cameraNode, SoundEmitter.TYPE, SoundEmitter.of(Sound.builder()
+            .root(Patch.named("v8", Vehicles.RPM, Vehicles.LOAD, Vehicles.SHIFT))
+            .volume(com.truesim.scene.audio.Range.db(-6, -6)).loop().build()));
     }
 
     /** Follows the camera at {@code eye} over {@code dt} seconds. */
@@ -43,21 +48,27 @@ final class CameraCar {
         double now = Math.sqrt(dx * dx + dy * dy + dz * dz) / dt;
         double before = speed;
         speed += (now - speed) * Math.min(1, dt * 4); // the camera jumps; a car does not
+        long engine = sounds.emitted(node); // the emitter's instance (0 until it plays)
+        if (engine == 0) {
+            return;
+        }
         double rpm = 800 + 1_000 * speed / GEARS[gear];
         if (rpm > 5_500 && gear < GEARS.length - 1) {
             gear++;
-            engine.trigger(Vehicles.SHIFT);
+            sounds.trigger(engine, Vehicles.SHIFT);
         } else if (rpm < 2_000 && gear > 0) {
             gear--;
-            engine.trigger(Vehicles.SHIFT);
+            sounds.trigger(engine, Vehicles.SHIFT);
         }
         rpm = Math.min(7_000, 800 + 1_000 * speed / GEARS[gear]);
         double accel = (speed - before) / dt;
         double load = Math.max(-1, Math.min(1, 0.15 + accel / 4));
-        engine.set(Vehicles.RPM, (float) rpm, 0.05).set(Vehicles.LOAD, (float) load, 0.1);
+        sounds.set(engine, Vehicles.RPM, (float) rpm, 0.05);
+        sounds.set(engine, Vehicles.LOAD, (float) load, 0.1);
     }
 
+    /** Stops the engine: its emitter goes. */
     void stop() {
-        engine.stop(0.3);
+        sounds.scene().components().remove(node, SoundEmitter.TYPE);
     }
 }

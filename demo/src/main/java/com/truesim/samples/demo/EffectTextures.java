@@ -1,22 +1,23 @@
 package com.truesim.samples.demo;
 
 import com.truesim.common.math.Maths;
-import com.truesim.engine.render.Textures;
 import com.truesim.engine.render.particles.Particles;
-import com.truesim.scene.assets.AssetId;
 import com.truesim.scene.assets.AssetRef;
-import com.truesim.scene.assets.AssetType;
+import com.truesim.scene.assets.Generator;
 import com.truesim.scene.assets.mesh.MeshData;
 import com.truesim.scene.assets.mesh.MeshLevel;
 import com.truesim.scene.assets.mesh.VertexAttribute;
+import com.truesim.scene.render.RenderAssets;
+import com.truesim.scene.render.TextureData;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.stream.IntStream;
 
 /**
- * The textures the demo's fire, smoke and sparks draw with, made from code when it starts (no files): value noise in
- * fractal sums, shaped. All linear, four bytes a texel, their mip chains made on the GPU.
+ * The textures the demo's fire, smoke and sparks draw with, made from code (no files): value noise in fractal sums,
+ * shaped. Each is a texture asset ({@link RenderAssets#TEXTURE}, generated in the shared cache by
+ * {@link #TEXTURES}), linear, four bytes a texel, its mip chain made on the GPU.
  *
  * <ul>
  *   <li>{@link #FLAME}: a flipbook of 8 x 8 frames, one flame tongue over its life: born round and dense at the bottom,
@@ -31,16 +32,6 @@ import java.util.stream.IntStream;
  */
 final class EffectTextures {
 
-    /** The kind of the refs below: textures made here. */
-    static final AssetType<String> TEXTURE = AssetType.of("demo.texture", String.class, s -> 0);
-    static final AssetRef<?> FLAME = AssetRef.of(TEXTURE, new AssetId(0, 1));
-    static final AssetRef<?> GLOW = AssetRef.of(TEXTURE, new AssetId(0, 2));
-    static final AssetRef<?> EMBER = AssetRef.of(TEXTURE, new AssetId(0, 3));
-    static final AssetRef<?> SMOKE = AssetRef.of(TEXTURE, new AssetId(0, 4));
-    static final AssetRef<?> SMOKE_NORMALS = AssetRef.of(TEXTURE, new AssetId(0, 5));
-    /** Where flames take on the fox: its upward-facing skin (see {@link #upward}). */
-    static final AssetRef<?> FOX_MASK = AssetRef.of(TEXTURE, new AssetId(0, 6));
-
     /** The flame flipbook's frames a side, and each frame's texels a side. */
     static final int FLAME_FRAMES = 8;
     private static final int FLAME_CELL = 128;
@@ -48,35 +39,74 @@ final class EffectTextures {
     static final int SMOKE_FRAMES = 4;
     private static final int SMOKE_CELL = 128;
 
+    /** A texture made here, by name. */
+    record Texture(String name) {
+    }
+
+    /** The fox's mask: from its mesh. */
+    record Mask(MeshData mesh) {
+    }
+
+    /** The textures, made from their names. */
+    static final Generator<Texture, TextureData> TEXTURES = (texture, seed) -> switch (texture.name()) {
+        case "flame" -> texture(FLAME_FRAMES * FLAME_CELL, flame());
+        case "glow" -> texture(64, glow(64));
+        case "ember" -> texture(32, ember(32));
+        case "smoke" -> texture(SMOKE_FRAMES * SMOKE_CELL, smoke()[0]);
+        case "smokeNormals" -> texture(SMOKE_FRAMES * SMOKE_CELL, smoke()[1]);
+        default -> throw new IllegalArgumentException("No texture " + texture.name());
+    };
+    /** The fox's mask, from its mesh ({@link #upward}). */
+    static final Generator<Mask, TextureData> MASKS = (mask, seed) -> texture(256, upward(mask.mesh(), 256));
+
+    static final AssetRef<TextureData> FLAME = made("flame");
+    static final AssetRef<TextureData> GLOW = made("glow");
+    static final AssetRef<TextureData> EMBER = made("ember");
+    static final AssetRef<TextureData> SMOKE = made("smoke");
+    static final AssetRef<TextureData> SMOKE_NORMALS = made("smokeNormals");
+
     private EffectTextures() {
     }
 
-    /** Makes the textures in {@code textures} and names them to {@code particles}. */
-    static void register(Particles particles, Textures textures) {
-        int flame = FLAME_FRAMES * FLAME_CELL;
-        particles.texture(FLAME, upload(textures, flame, flame, flame()));
-        particles.texture(GLOW, upload(textures, 64, 64, glow(64)));
-        particles.texture(EMBER, upload(textures, 32, 32, ember(32)));
-        int smoke = SMOKE_FRAMES * SMOKE_CELL;
-        float[][] puffs = smoke();
-        particles.texture(SMOKE, upload(textures, smoke, smoke, puffs[0]));
-        particles.texture(SMOKE_NORMALS, upload(textures, smoke, smoke, puffs[1]));
+    private static AssetRef<TextureData> made(String name) {
+        return AssetRef.generated(RenderAssets.TEXTURE, TEXTURES, new Texture(name), 1);
     }
 
-    /** Makes {@link #FOX_MASK} from the fox's mesh ({@link #upward}) and names it to {@code particles}. */
-    static void registerFoxMask(Particles particles, Textures textures, MeshData fox) {
-        particles.texture(FOX_MASK, upload(textures, 256, 256, upward(fox, 256)));
+    /** Where flames take on the fox: its upward-facing skin, from its bind-pose {@code mesh}. */
+    static AssetRef<TextureData> foxMask(MeshData mesh) {
+        return AssetRef.generated(RenderAssets.TEXTURE, MASKS, new Mask(mesh), 1);
     }
 
-    /** Uploads {@code rgba} (floats 0 to 1, four a texel) as a linear texture; its slot. */
-    private static int upload(Textures textures, int width, int height, float[] rgba) {
-        try (Arena arena = Arena.ofConfined()) {
-            MemorySegment bytes = arena.allocate(rgba.length);
-            for (int i = 0; i < rgba.length; i++) {
-                bytes.set(ValueLayout.JAVA_BYTE, i, (byte) Math.round(255 * Math.clamp(rgba[i], 0f, 1f)));
-            }
-            return textures.data(width, height, bytes);
+    /**
+     * Loads the textures through {@code assets} and names them to {@code particles}, uploaded to the assets' textures.
+     * Particles name texture slots themselves until the engine resolves texture assets for techniques (the engine
+     * split plan's 7.5): the upload is that one step by hand, the content an asset.
+     */
+    static void register(Particles particles, DemoAssets assets) throws InterruptedException {
+        for (AssetRef<TextureData> ref : java.util.List.of(FLAME, GLOW, EMBER, SMOKE, SMOKE_NORMALS)) {
+            register(particles, assets, ref);
         }
+    }
+
+    /** Loads the fox's mask ({@link #foxMask}) from {@code mesh} and names it to {@code particles}. */
+    static void registerFoxMask(Particles particles, DemoAssets assets, MeshData mesh) throws InterruptedException {
+        register(particles, assets, foxMask(mesh));
+    }
+
+    private static void register(Particles particles, DemoAssets assets, AssetRef<TextureData> ref)
+        throws InterruptedException {
+        TextureData texture = assets.await(ref);
+        particles.texture(ref, assets.resources().textures().data(texture.width(), texture.height(),
+            texture.texels()));
+    }
+
+    /** {@code rgba} (floats 0 to 1, four a texel) of a square {@code size} texels a side, as linear 8-bit texels. */
+    private static TextureData texture(int size, float[] rgba) {
+        MemorySegment bytes = Arena.ofAuto().allocate(rgba.length);
+        for (int i = 0; i < rgba.length; i++) {
+            bytes.set(ValueLayout.JAVA_BYTE, i, (byte) Math.round(255 * Math.clamp(rgba[i], 0f, 1f)));
+        }
+        return new TextureData(size, size, TextureData.ColorSpace.LINEAR, bytes);
     }
 
     /** The flame flipbook: frame f of the 64 at column f % 8, row f / 8, the tongue's age f / 63 of its life. */

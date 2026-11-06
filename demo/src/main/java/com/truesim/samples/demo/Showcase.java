@@ -14,6 +14,8 @@ import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.GpuTimings;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
+import com.truesim.engine.scene.CameraSync;
+import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.render.ClusteredForwardShading;
 import com.truesim.engine.render.ClusteredLights;
 import com.truesim.engine.render.DisplayTransform;
@@ -42,7 +44,7 @@ import java.util.Map;
  * particle system does at once ({@link ShowcaseEffects}): layered fire on a bonfire, on swaying torches and on a tenth
  * of the foxes as they run, dust at every fox's feet, a fireworks show lighting the ground, blasts of rocks bouncing
  * and casting shadows, hail, sparks, swirls and smoke in gusting wind, ribbons and beams. {@code ./gradlew
- * :engine-demo:showcase -Pcrowd=<glTF-Sample-Assets>/Models/Fox/glTF/Fox.gltf}, then either:
+ * :samples-demo:showcase -Pcrowd=<glTF-Sample-Assets>/Models/Fox/glTF/Fox.gltf}, then either:
  *
  * <ul>
  *   <li>frames as a window shows them ({@link Capture}: tone mapped, sRGB) from one camera along a path:
@@ -69,35 +71,38 @@ public final class Showcase {
 
     public static void main(String[] args) throws Exception {
         boolean measure = List.of(args).contains("measure");
-        String fox = System.getProperty("truesim.demo.crowd", System.getProperty("truesim.demo.character"));
-        if (fox == null) {
-            throw new IllegalArgumentException("The showcase needs the Khronos fox: -Pcrowd=<path to Fox.gltf>");
+        EngineSettings settings = DemoSettings.standalone(args);
+        String fox = settings.get(DemoSettings.CROWD).isEmpty() ? settings.get(DemoSettings.CHARACTER)
+            : settings.get(DemoSettings.CROWD);
+        if (fox.isEmpty()) {
+            throw new IllegalArgumentException("The showcase needs the Khronos fox: --set demo.assets=<glTF-Sample-"
+                + "Assets/Models> --set demo.crowd=demo://Fox/glTF/Fox.gltf (-Pcrowd=<path to Fox.gltf>)");
         }
+        int foxes = settings.get(DemoSettings.FOXES) > 0 ? settings.get(DemoSettings.FOXES) : 100;
         int color = VK_FORMAT_R16G16B16A16_SFLOAT;
         int depth = VK_FORMAT_D32_SFLOAT;
         try (VulkanInstance instance = VulkanInstance.builder().applicationName("showcase").surfaces(false).build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2).timings(measure);
-             DemoScene world = new DemoScene(device, graph.frameSlots(), color, depth, new DemoScene.Arena(ARENA_X,
-                 ARENA_Z, ARENA_RADIUS, Path.of(fox), Integer.getInteger("truesim.demo.foxes", 100)));
+             DemoScene world = DemoScene.standalone(device, graph.frameSlots(), color, depth, settings, false,
+                 new DemoScene.Arena(ARENA_X, ARENA_Z, ARENA_RADIUS, fox, foxes));
              ShowcaseEffects effects = new ShowcaseEffects(device, graph.frameSlots(), world, ARENA_X, ARENA_Z,
-                 ARENA_RADIUS)) {
+                 ARENA_RADIUS, settings)) {
             graph.add(effects.simulation());
-            graph.settings().set(DisplayTransform.EXPOSURE, Float.parseFloat(System.getProperty(
-                "truesim.demo.exposure", "0.35")));
-            CameraPath path = new CameraPath(System.getProperty("truesim.demo.camera", "orbit"), ARENA_X, ARENA_Z,
-                world.crowd());
+            float exposure = settings.get(DemoSettings.EXPOSURE);
+            graph.settings().set(DisplayTransform.EXPOSURE, exposure > 0 ? exposure : 0.35f);
+            CameraPath path = new CameraPath(settings.get(DemoSettings.CAMERA), ARENA_X, ARENA_Z, world.crowd());
             if (measure) {
-                measure(device, graph, world, effects, path);
+                measure(device, graph, world, effects, path, settings);
             } else {
-                capture(device, graph, world, effects, path);
+                capture(device, graph, world, effects, path, settings);
             }
         }
     }
 
     /** A view of {@code camera} at its size in {@code port}: forward shading, lights, particles, the sun's shadows. */
     private static void view(DemoScene world, ShowcaseEffects effects, ViewPort port, Camera camera,
-        Camera head, int color, int depth, Shadows shadows) {
+        Camera head, int color, int depth, Shadows shadows, boolean glass) {
         SceneView view = world.geometry().createView(port, camera, ViewOptions.of(1 << 14, 1 << 22)
             .withOcclusion(true)).set(1, MeshletRenderer.MODE_LIT);
         port.add(new ClusteredForwardShading(world.geometry(), view, color, depth).clearColor(0.07f, 0.1f, 0.26f))
@@ -105,7 +110,7 @@ public final class Showcase {
             .add(head == null ? new ParticleDraw(effects.particles(), view)
                 : new ParticleDraw(effects.particles(), view, head))
             .add(shadows.view(view));
-        if (ShowcaseEffects.GLASS > 0) { // windows: blended glass, and the fires drawn before it
+        if (glass) { // windows: blended glass, and the fires drawn before it
             port.add(new ChosenTransparency(world.geometry(), view))
                 .add(ParticleDraw.beforeGlass(effects.particles(), view, head));
         }
@@ -113,32 +118,37 @@ public final class Showcase {
 
     /** Frames from one camera along the path, written as PNG files (and stills), simulated at 60 Hz. */
     private static void capture(VulkanDevice device, FrameGraph graph, DemoScene world, ShowcaseEffects effects,
-        CameraPath path) throws Exception {
-        String[] size = System.getProperty("truesim.demo.size", "1920x1080").split("x");
+        CameraPath path, EngineSettings settings) throws Exception {
+        String[] size = settings.get(DemoSettings.SIZE).split("x");
         int width = Integer.parseInt(size[0]);
         int height = Integer.parseInt(size[1]);
-        int frames = Integer.getInteger("truesim.demo.frames", 600);
-        int first = Integer.getInteger("truesim.demo.first", 0);
-        int every = Integer.getInteger("truesim.demo.every", 2);
-        String out = System.getProperty("truesim.demo.out");
-        List<String> stills = List.of(System.getProperty("truesim.demo.stills", "").split(","));
+        int frames = DemoSettings.or(settings.get(DemoSettings.FRAMES), 600);
+        int first = settings.get(DemoSettings.FIRST);
+        int every = settings.get(DemoSettings.EVERY);
+        String out = settings.get(DemoSettings.OUT).isEmpty() ? null : settings.get(DemoSettings.OUT);
+        List<String> stills = List.of(settings.get(DemoSettings.STILLS).split(","));
         if (out != null) {
-            Files.createDirectories(Path.of(out));
+            Files.createDirectories(Path.of(out)); // output only: the frames written
         }
+        // The camera: a node of the world, the renderer's camera following it
         Camera camera = new Camera();
+        long cameraNode = world.cameraNode(Math.PI / 3, 0.05);
         ViewPort port = graph.addView("camera").size(width, height);
+        CameraSync cameraSync = new CameraSync(world.scene(), cameraNode, camera, port);
         Shadows shadows = new Shadows(world.geometry(), world.lights());
-        view(world, effects, port, camera, null, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT, shadows);
+        view(world, effects, port, camera, null, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT, shadows,
+            glass(settings));
         double[] eye = new double[3];
         double[] target = new double[3];
         int written = 0;
         try (Capture capture = new Capture(device, port); shadows) {
             for (int frame = 0; frame < frames; frame++) {
                 double seconds = frame / 60.0;
-                world.update(seconds);
                 path.at(seconds, eye, target);
-                camera.position(eye[0], eye[1], eye[2]).set(target[0] - eye[0], target[1] - eye[1],
-                    target[2] - eye[2], 0, 1, 0, Math.PI / 3, width, height, 0.05);
+                DemoScene.look(world.scene(), cameraNode, eye[0], eye[1], eye[2], target[0] - eye[0],
+                    target[1] - eye[1], target[2] - eye[2]);
+                world.update(seconds); // the scene updated: the camera node's place final
+                cameraSync.update();
                 world.crowd().lod(eye[0], eye[2]);
                 effects.update(1 / 60.0, eye);
                 graph.beginFrame();
@@ -170,13 +180,17 @@ public final class Showcase {
      * (rendered into images, nothing presented), simulated at 72 Hz.
      */
     private static void measure(VulkanDevice device, FrameGraph graph, DemoScene world, ShowcaseEffects effects,
-        CameraPath path) throws Exception {
+        CameraPath path, EngineSettings settings) throws Exception {
         int warmUp = 120;
-        int frames = Integer.getInteger("truesim.demo.frames", 720);
+        int frames = DemoSettings.or(settings.get(DemoSettings.FRAMES), 720);
         int usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         List<AutoCloseable> owned = new ArrayList<>();
+        // The cameras: the head a node of the world, the eyes its children 64 mm apart, followed by the renderer's
         Camera[] eyes = {new Camera(), new Camera()};
         Camera head = new Camera();
+        long headNode = world.cameraNode(Math.PI / 2, 0.05);
+        CameraSync headSync = new CameraSync(world.scene(), headNode, head);
+        CameraSync[] eyeSyncs = new CameraSync[2];
         Shadows shadows = new Shadows(world.geometry(), world.lights());
         owned.add(shadows);
         for (int e = 0; e < 2; e++) {
@@ -184,7 +198,12 @@ public final class Showcase {
                 VK_IMAGE_ASPECT_COLOR_BIT);
             owned.add(target);
             ViewPort port = graph.addView(e == 0 ? "left" : "right").size(EYE_WIDTH, EYE_HEIGHT);
-            view(world, effects, port, eyes[e], head, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT, shadows);
+            long eyeNode = world.cameraNode(Math.PI / 2, 0.05);
+            world.scene().setParent(eyeNode, headNode);
+            world.scene().setTranslation(eyeNode, e == 0 ? -0.032 : 0.032, 0, 0);
+            eyeSyncs[e] = new CameraSync(world.scene(), eyeNode, eyes[e], port);
+            view(world, effects, port, eyes[e], head, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT, shadows,
+                glass(settings));
             port.output(Keys.SCENE_COLOR, new ExternalImage("eye " + e, EYE_WIDTH, EYE_HEIGHT, Format.R8G8B8A8_UNORM,
                 usage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
                 .set(target.handle(), target.view()));
@@ -216,18 +235,13 @@ public final class Showcase {
             }
             previous = start;
             double seconds = frame / 72.0;
-            world.update(seconds);
             path.at(seconds, eye, target);
-            for (int e = 0; e < 2; e++) {
-                // The eyes 64 mm apart across the view
-                double dx = target[0] - eye[0];
-                double dz = target[2] - eye[2];
-                double length = Math.max(1e-9, com.truesim.common.math.Maths.sqrt(dx * dx + dz * dz));
-                double offset = e == 0 ? -0.032 : 0.032;
-                eyes[e].position(eye[0] - offset * dz / length, eye[1], eye[2] + offset * dx / length)
-                    .set(dx, target[1] - eye[1], dz, 0, 1, 0, Math.PI / 2, EYE_WIDTH, EYE_HEIGHT, 0.05);
-            }
-            head.position(eye[0], eye[1], eye[2]);
+            DemoScene.look(world.scene(), headNode, eye[0], eye[1], eye[2], target[0] - eye[0], target[1] - eye[1],
+                target[2] - eye[2]);
+            world.update(seconds); // the scene updated: the camera nodes' places final
+            headSync.update(EYE_WIDTH, EYE_HEIGHT);
+            eyeSyncs[0].update();
+            eyeSyncs[1].update();
             world.crowd().lod(eye[0], eye[2]);
             long updated = System.nanoTime();
             effects.update(1 / 72.0, eye);
@@ -276,6 +290,11 @@ public final class Showcase {
         for (AutoCloseable resource : owned) {
             resource.close();
         }
+    }
+
+    /** Windows of glass before the bonfire: {@code -Pglass=true} ({@link ShowcaseEffects#GLASS}) or the setting. */
+    private static boolean glass(EngineSettings settings) {
+        return ShowcaseEffects.GLASS > 0 || settings.get(DemoSettings.GLASS);
     }
 
     private static void report(double[] wall, double[] scene, double[] animation, double[] sync, double[] wait,
