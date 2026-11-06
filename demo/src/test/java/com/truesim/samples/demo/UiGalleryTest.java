@@ -122,10 +122,10 @@ class UiGalleryTest {
             key(Key.A, false);
             key(Key.LEFT_CONTROL, false);
             frames(2);
-            assertThat(selected.size()).as("Ctrl+A").isEqualTo(GalleryWorld.ROCKS);
-            assertThat(app.gizmo.count()).as("the gizmo holds them all").isEqualTo(GalleryWorld.ROCKS);
-            double[][] before = new double[GalleryWorld.ROCKS][];
-            for (int i = 0; i < GalleryWorld.ROCKS; i++) {
+            assertThat(selected.size()).as("Ctrl+A").isEqualTo(app.world.rocks.length);
+            assertThat(app.gizmo.count()).as("the gizmo holds them all").isEqualTo(app.world.rocks.length);
+            double[][] before = new double[app.world.rocks.length][];
+            for (int i = 0; i < app.world.rocks.length; i++) {
                 before[i] = translation(graph, app.world.rocks[i]);
             }
             double ox = app.gizmo.origin(0);
@@ -147,7 +147,7 @@ class UiGalleryTest {
             shot("3-all-moved");
             double dx = translation(graph, app.world.rocks[0])[0] - before[0][0];
             assertThat(Math.abs(dx)).as("moved along X").isGreaterThan(0.1);
-            for (int i = 0; i < GalleryWorld.ROCKS; i++) {
+            for (int i = 0; i < app.world.rocks.length; i++) {
                 double[] t = translation(graph, app.world.rocks[i]);
                 assertThat(t[0] - before[i][0]).as("rock %d along X", i).isCloseTo(dx, within(1e-6));
                 assertThat(t[1] - before[i][1]).as("rock %d along Y", i).isCloseTo(0, within(1e-6));
