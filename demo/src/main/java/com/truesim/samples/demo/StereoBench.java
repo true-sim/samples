@@ -47,7 +47,9 @@ import java.util.Map;
  * leaves the sun's cascades out, {@code rays} traces the sun's shadows instead (inline ray queries from visibility buffer
  * shading, on devices with ray tracing): every mesh has a bottom level, skinned copies' refitted each frame they move
  * (the pass "bottom level refits"). With {@code -Peffect=x,y,z} ({@code --set demo.effect=x,y,z}) the demo's effects play there, drawn in both eyes as a
- * pair: one particle sort for both, billboards facing their center.
+ * pair: one particle sort for both, billboards facing their center. Any setting, the engine's too, comes with
+ * {@code -Pset=name=value,...} ({@code --set name=value}): {@code -Pset=render.interpolation=off} draws moved instances
+ * where they are instead of between fixed steps.
  */
 public final class StereoBench {
 

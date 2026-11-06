@@ -103,13 +103,18 @@ public final class StreamBench {
         final int meshesRemoved;
         final int textures;
         final int builds;
+        final int cellsIn;
+        final int cellsOut;
         double gpu = Double.NaN;
 
-        Frame(int index, double millis, int meshesAdded, int meshesRemoved, int textures, int builds) {
+        Frame(int index, double millis, int meshesAdded, int meshesRemoved, int textures, int builds, int cellsIn,
+            int cellsOut) {
             this.index = index;
             this.millis = millis;
             this.meshesAdded = meshesAdded;
             this.meshesRemoved = meshesRemoved;
+            this.cellsIn = cellsIn;
+            this.cellsOut = cellsOut;
             this.textures = textures;
             this.builds = builds;
         }
@@ -194,7 +199,7 @@ public final class StreamBench {
                 }
                 long now = System.nanoTime();
                 frames.add(new Frame(f, (now - start) / 1e6, flight.meshesAdded, flight.meshesRemoved,
-                    flight.texturesAdded, graph.builds() - builds));
+                    flight.texturesAdded, graph.builds() - builds, flight.cellsIn, flight.cellsOut));
                 com.truesim.engine.graph.GpuTimings gpu = graph.timings();
                 if (gpu != null && gpu.frame() >= 1 && gpu.frame() <= frames.size()) {
                     double frameStart = gpu.frameStartMillis(); // the frame start's uploads (textures, mips) too
@@ -313,6 +318,7 @@ public final class StreamBench {
         return GeometryPool.Capacity.of(vertices, vertices / (large ? 16 : 32), Math.max(512, cells() * 4 + 64));
     }
 
+
     private static void report(List<Frame> frames, StreamFlight flight) {
         List<Frame> timed = frames.subList(Math.min(60, frames.size() - 1), frames.size()); // after start-up
         double[] millis = timed.stream().mapToDouble(Frame::millis).sorted().toArray();
@@ -336,6 +342,15 @@ public final class StreamBench {
             .orElse(0);
         System.out.printf(Locale.ROOT, "Mean ms: frames streaming nothing %.2f, adding %.2f, removing %.2f, rebuilding "
             + "%.2f%n", plain, adding, removing, rebuilding);
+        // By what the flight did rather than by the pool's flow: frames taking cells out (the scene way: subtrees
+        // removed; the baseline: cells cleared) and putting cells in (attached; placed), with their worst
+        double[] out = timed.stream().filter(f -> f.cellsOut > 0).mapToDouble(Frame::millis).toArray();
+        double[] in = timed.stream().filter(f -> f.cellsIn > 0 && f.cellsOut == 0).mapToDouble(Frame::millis)
+            .toArray();
+        System.out.printf(Locale.ROOT, "Cells: frames taking cells out %d, mean %.2f ms, max %.2f; putting cells in %d, "
+                + "mean %.2f ms, max %.2f%n", out.length, Arrays.stream(out).average().orElse(0),
+            Arrays.stream(out).max().orElse(0), in.length, Arrays.stream(in).average().orElse(0),
+            Arrays.stream(in).max().orElse(0));
         double[] gpu = timed.stream().mapToDouble(f -> f.gpu).filter(g -> !Double.isNaN(g)).sorted().toArray();
         if (gpu.length > 0) {
             System.out.printf(Locale.ROOT, "GPU per frame (graphics queue, frame start included), %d timed: p50 %.2f "
@@ -365,6 +380,10 @@ public final class StreamBench {
             System.out.printf(Locale.ROOT, "Frame thread in pool.add: %.1f ms in all, %.2f at worst; in adding "
                 + "textures: %.1f in all, %.2f at worst%n", flight.meshMillis[0], flight.meshMillis[1],
                 flight.textureMillis[0], flight.textureMillis[1]);
+        }
+        if (flight.mode() == Mode.SCENE) {
+            System.out.printf(Locale.ROOT, "Reused: meshes placed in removed meshes' pool ranges %d, built into removed "
+                + "meshes' memory %d%n", flight.pool().reusedCount(), StreamFlight.meshPool.reusedCount());
         }
         System.out.println("Slowest frames:");
         timed.stream().sorted((a, b) -> Double.compare(b.millis(), a.millis())).limit(12).forEach(f ->

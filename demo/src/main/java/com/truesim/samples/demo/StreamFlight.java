@@ -35,9 +35,12 @@ import com.truesim.scene.assets.AssetCache;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.Generator;
 import com.truesim.scene.assets.mesh.MeshData;
+import com.truesim.scene.assets.mesh.MeshPool;
 import com.truesim.scene.core.CameraLens;
 import com.truesim.scene.core.ComponentStore;
 import com.truesim.scene.core.LightSource;
+import com.truesim.scene.core.NodeHandle;
+import com.truesim.scene.core.SceneBatch;
 import com.truesim.scene.core.SceneGraph;
 import com.truesim.scene.core.ShadowSpec;
 import com.truesim.scene.render.MaterialData;
@@ -66,13 +69,16 @@ import java.util.concurrent.locks.LockSupport;
  * {@link StreamBench.Mode}:
  *
  * <ul>
- *   <li>{@link StreamBench.Mode#SCENE} (the default), the engine's way: a cell is nodes of the scene graph with
- *       {@link Renderable} components, its meshes, texture and materials generated assets
+ *   <li>{@link StreamBench.Mode#SCENE} (the default), the engine's way: a cell is a subtree of the scene graph with
+ *       {@link Renderable} components, built as a {@link SceneBatch} on a builder thread (where its rocks go, the
+ *       references to its assets) and attached in one pass; its meshes, texture and materials are generated assets
  *       ({@link AssetRef#generated}) loaded through the one asset cache ({@link DemoAssets}), made ready for the GPU
  *       on worker threads ({@link SceneResources#prepareOn}, unless {@code direct}) and uploaded by the shared
  *       {@link SceneResources}; a {@link SceneSync} keeps the nodes as instances of the GPU scene. A cell leaving
- *       range is its nodes removed: what only it used leaves the GPU and is let go of in the cache, which keeps none of
- *       it ({@code assets.budgetMegabytes} 0 by default: the flight never comes back).</li>
+ *       range is its subtree removed in one pass: what only it used leaves the GPU and is let go of in the cache,
+ *       which keeps none of it ({@code assets.budgetMegabytes} 0 by default: the flight never comes back); its meshes'
+ *       memory and pool ranges are kept for the next cells' meshes of the same sizes ({@code assets.meshPool},
+ *       {@code render.meshSpares}).</li>
  *   <li>{@link StreamBench.Mode#BASELINE}, the comparison: the hand-written path the engine's way replaced, kept only
  *       to measure it against. Cells are built on executor threads of their own and put straight into a geometry
  *       pool, textures and a material table it owns, as hand-built {@link Material}s and instances set by id
@@ -114,9 +120,14 @@ final class StreamFlight implements AutoCloseable {
     record Plain(float red, float green, float blue, float roughness) {
     }
 
-    static final Generator<Rock, MeshData> ROCKS = (rock, seed) -> DemoMeshes.rock(rock.subdivisions());
+    /**
+     * The scene way's meshes let go of, which the generators build into ({@link DemoAssets#meshPool()}): set as a
+     * flight starts, read by the generators (constants: their identity is part of their assets' names).
+     */
+    static volatile MeshPool meshPool;
+    static final Generator<Rock, MeshData> ROCKS = (rock, seed) -> DemoMeshes.rock(rock.subdivisions(), meshPool);
     static final Generator<Ground, MeshData> GROUNDS = (ground, seed) -> DemoMeshes.groundTile(baseX(ground.key()),
-        baseZ(ground.key()), StreamBench.CELL, ground.quads());
+        baseZ(ground.key()), StreamBench.CELL, ground.quads(), meshPool);
     static final Generator<Texels, TextureData> TEXELS = (texels, seed) -> {
         int size = texels.size();
         MemorySegment memory = MemorySegment.ofArray(new int[size * size]); // on the heap: the collector frees it
@@ -140,12 +151,11 @@ final class StreamFlight implements AutoCloseable {
     static final class Cell {
         final long key;
         final long seed;
-        long[] nodes; // the scene way's: the ground tile's last (small cells), rock i of mesh i % MESHES_PER_CELL
-        // the scene way's placements (x, y, z, scale per rock), worked out on a builder thread; then the refs its
-        // nodes take, kept until they are made
-        CompletableFuture<double[]> placing;
-        List<AssetRef<MeshData>> sceneMeshes;
-        List<List<AssetRef<MaterialData>>> sceneMaterials;
+        // the scene way's: its subtree's root once attached, and a rock of it (drawn once the cell is placed)
+        long root = NodeHandle.NONE;
+        long rock = NodeHandle.NONE;
+        // the scene way's nodes, built as a batch on a builder thread (placements worked out there), attached later
+        CompletableFuture<SceneBatch> placing;
         // the baseline's
         CompletableFuture<Built> building;
         int[] meshes = new int[0];
@@ -225,7 +235,8 @@ final class StreamFlight implements AutoCloseable {
     private MeshletRenderer renderer;
     private Shadows sun; // the sun's cascades, kept while nothing they show moves
     private long frames;
-    private int meshesSeen; // on the GPU at the end of the last step (the scene way's counts)
+    private long meshesSeen; // added to the pool by the end of the last step (the scene way's counts)
+    private long meshesGone; // removed from the pool by then
     private int texturesSeen;
 
     /** Where the camera is: metres along the flight. */
@@ -236,6 +247,9 @@ final class StreamFlight implements AutoCloseable {
     /** What the last step streamed. */
     int meshesAdded;
     int meshesRemoved;
+    /** Cells the last step put in (the scene way: attached; the baseline: placed) and took out. */
+    int cellsIn;
+    int cellsOut;
     int texturesAdded;
     int texturesRemoved;
     /** The scene way's frame-thread time: taking in what arrived (ms in all, worst), and updating the scene. */
@@ -272,6 +286,7 @@ final class StreamFlight implements AutoCloseable {
                 assets.cache().setBudget((long) settings.get(Assets.BUDGET) << 20);
             }
             assets.cache().addListener(new Unfreed());
+            meshPool = assets.meshPool();
             resources = assets.resources().loading(StreamBench.streamed ? SceneResources.Loading.STREAM
                 : SceneResources.Loading.WHOLE);
             if (!StreamBench.direct) {
@@ -371,6 +386,8 @@ final class StreamFlight implements AutoCloseable {
         scene.setTranslation(cameraNode, x, 8, 0);
         meshesAdded = 0;
         meshesRemoved = 0;
+        cellsIn = 0;
+        cellsOut = 0;
         texturesAdded = 0;
         texturesRemoved = 0;
         int range = StreamBench.range;
@@ -389,9 +406,7 @@ final class StreamFlight implements AutoCloseable {
         long since = System.nanoTime();
         assets.drain(); // loads and preparing done: uploaded (standalone; the engine drains its own at the frame start)
         spent(takeMillis, since);
-        int arrivedMeshes = pool.meshCount();
         int arrivedTextures = textures.count();
-        meshesAdded += arrivedMeshes - meshesSeen; // what arrived since the last step, here or at the engine's drain
         texturesAdded += arrivedTextures - texturesSeen;
         for (int i = cx - range; i <= cx + range; i++) {
             for (int j = -range; j <= range; j++) {
@@ -406,7 +421,7 @@ final class StreamFlight implements AutoCloseable {
         long attachUntil = since + (long) (resources.settings().get(RenderSettings.STREAM_FRAME_BUDGET) * 1e6);
         for (int c = 0; c < cells.size(); c++) {
             Cell cell = cells.get(c);
-            if (cell.nodes == null && (waitForBuilds || cell.placing.isDone())) {
+            if (cell.root == NodeHandle.NONE && (waitForBuilds || cell.placing.isDone())) {
                 attach(cell);
                 if (!waitForBuilds && System.nanoTime() - attachUntil > 0) {
                     break;
@@ -418,8 +433,11 @@ final class StreamFlight implements AutoCloseable {
         for (int c = cells.size() - 1; c >= 0; c--) {
             Cell cell = cells.get(c);
             if (!wanted(cell, cx, range)) {
-                for (long node : cell.nodes == null ? new long[0] : cell.nodes) {
-                    scene.remove(node); // its renderable with it: what only it used leaves the GPU and the cache
+                if (cell.root != NodeHandle.NONE) {
+                    cellsOut++;
+                    scene.remove(cell.root); // its subtree, renderables with it, in one pass: what only it used leaves
+                } else { // the GPU and the cache
+                    cell.placing.thenAccept(StreamFlight::recycle); // never attached: its batch back when built
                 }
                 cells.set(c, cells.get(cells.size() - 1));
                 cells.remove(cells.size() - 1);
@@ -432,10 +450,8 @@ final class StreamFlight implements AutoCloseable {
         sync.update();
         lightSync.update();
         spent(syncMillis, since);
-        int left = pool.meshCount();
         int leftTextures = textures.count();
-        // gone at the update: the meshes and textures only the cells removed used
-        meshesRemoved = Math.max(0, arrivedMeshes - left);
+        // gone at the update: the textures only the cells removed used
         texturesRemoved = Math.max(0, arrivedTextures - leftTextures);
         if (waitForBuilds) {
             while (resources.loadingCount() > 0 || resources.preparingCount() > 0) {
@@ -444,15 +460,17 @@ final class StreamFlight implements AutoCloseable {
             }
             sync.update(); // what arrived drawn this frame
         }
-        int now = pool.meshCount();
         int textureCount = textures.count();
-        meshesAdded += Math.max(0, now - left); // what came while waiting (or, from the cache, at the update)
         texturesAdded += Math.max(0, textureCount - leftTextures);
-        meshesSeen = now;
+        // the pool's flow since the last step: what arrived here, at the engine's drain or at the update, and what left
+        meshesAdded = (int) (pool.addedCount() - meshesSeen);
+        meshesRemoved = (int) (pool.removedCount() - meshesGone);
+        meshesSeen = pool.addedCount();
+        meshesGone = pool.removedCount();
         texturesSeen = textureCount;
         for (int c = 0; c < cells.size(); c++) {
-            long[] nodes = cells.get(c).nodes;
-            placed += nodes != null && sync.slotOf(nodes[0]) >= 0 ? 1 : 0;
+            Cell cell = cells.get(c);
+            placed += cell.rock != NodeHandle.NONE && sync.slotOf(cell.rock) >= 0 ? 1 : 0;
         }
     }
 
@@ -461,9 +479,15 @@ final class StreamFlight implements AutoCloseable {
      * meshes, a texture and two materials of its own (the ground's material shared), asked for at the next update.
      */
     private Cell enter(Cell cell) {
-        double baseX = baseX(cell.key);
-        double baseZ = baseZ(cell.key);
+        // Its nodes (where its rocks go: the terrain's height is noise, costly) and the references to its assets made
+        // as a batch on a builder thread, attached once done, in a later step: the frame's thread only puts it in
         boolean large = StreamBench.large;
+        cell.placing = CompletableFuture.supplyAsync(() -> build(cell, large), builders);
+        return cell;
+    }
+
+    /** {@code cell}'s meshes: generated rocks and its ground tile, or (large) its terrain tile and a rock. */
+    private static List<AssetRef<MeshData>> meshesOf(Cell cell, boolean large) {
         List<AssetRef<MeshData>> meshes = new ArrayList<>();
         if (large) { // 66,000 vertices, 131,000 triangles (heavy: 295,000)
             meshes.add(AssetRef.generated(RenderAssets.MESH, GROUNDS,
@@ -476,69 +500,73 @@ final class StreamFlight implements AutoCloseable {
             }
             meshes.add(AssetRef.generated(RenderAssets.MESH, GROUNDS, new Ground(cell.key, 24), cell.seed));
         }
-        AssetRef<TextureData> texture = AssetRef.generated(RenderAssets.TEXTURE, TEXELS,
-            new Texels(textureSize()), cell.seed);
-        List<List<AssetRef<MaterialData>>> rockMaterials = List.of(
-            List.of(AssetRef.generated(RenderAssets.MATERIAL, PAINTED, new Painted(texture), cell.seed)),
-            List.of(AssetRef.generated(RenderAssets.MATERIAL, PLAIN, STONE, cell.seed)));
-        cell.sceneMeshes = meshes;
-        cell.sceneMaterials = rockMaterials;
-        // Where its rocks go (the terrain's height is noise, costly): worked out on a builder thread; the nodes are
-        // made once it is done, in a later step (attach), so the frame's thread only makes nodes
-        cell.placing = CompletableFuture.supplyAsync(() -> placements(cell, baseX, baseZ, large), builders);
-        return cell;
+        return meshes;
     }
 
-    /** The x, y, z and scale of each of {@code cell}'s rocks: off the frame's thread. */
-    private static double[] placements(Cell cell, double baseX, double baseZ, boolean large) {
-        double[] at = new double[4 * INSTANCES_PER_CELL];
+    /** {@code cell}'s two rock materials: one painted with its texture, one plain. */
+    private static List<List<AssetRef<MaterialData>>> rockMaterialsOf(Cell cell) {
+        AssetRef<TextureData> texture = AssetRef.generated(RenderAssets.TEXTURE, TEXELS,
+            new Texels(textureSize()), cell.seed);
+        return List.of(
+            List.of(AssetRef.generated(RenderAssets.MATERIAL, PAINTED, new Painted(texture), cell.seed)),
+            List.of(AssetRef.generated(RenderAssets.MATERIAL, PLAIN, STONE, cell.seed)));
+    }
+
+    /** Batches attached and cleared, for the builders to fill again: streaming allocates no batches once warm. */
+    private static final java.util.concurrent.ConcurrentLinkedQueue<SceneBatch> BATCHES =
+        new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private static void recycle(SceneBatch batch) {
+        batch.clear();
+        BATCHES.add(batch);
+    }
+
+    /**
+     * {@code cell}'s nodes as a batch, on a builder thread: a root, under it the rocks (x, y, z and scale from the
+     * terrain's heights) and the ground tile (small cells), with renderables of the cell's meshes and materials.
+     */
+    private static SceneBatch build(Cell cell, boolean large) {
+        List<AssetRef<MeshData>> meshes = meshesOf(cell, large);
+        List<List<AssetRef<MaterialData>>> rockMaterials = rockMaterialsOf(cell);
+        double baseX = baseX(cell.key);
+        double baseZ = baseZ(cell.key);
+        SceneBatch batch = BATCHES.poll();
+        if (batch == null) {
+            batch = new SceneBatch(INSTANCES_PER_CELL + 2);
+        }
+        int root = batch.add();
         SplittableRandom random = new SplittableRandom(cell.key);
         for (int i = 0; i < INSTANCES_PER_CELL; i++) {
             double x = baseX + random.nextDouble(StreamBench.CELL);
             double z = baseZ + random.nextDouble(StreamBench.CELL);
             double s = 0.3 + random.nextDouble(1.5);
-            if (large && i == 0) { // the cell's terrain tile
-                at[4 * i] = baseX;
-                at[4 * i + 2] = baseZ;
-                at[4 * i + 3] = 1;
+            int node = batch.add(root);
+            if (large && i == 0) { // the cell's terrain tile, textured
+                batch.setTranslation(node, baseX, 0, baseZ);
+                batch.set(node, Renderable.TYPE, Renderable.of(meshes.get(0), rockMaterials.get(0)));
                 continue;
             }
-            at[4 * i] = x;
-            at[4 * i + 1] = DemoMeshes.height(x, z) + s * 0.6;
-            at[4 * i + 2] = z;
-            at[4 * i + 3] = s;
-        }
-        return at;
-    }
-
-    /** Makes {@code cell}'s nodes from its placements: the ground tile (small cells) and the rocks with renderables. */
-    private void attach(Cell cell) {
-        double[] at = cell.placing.join();
-        boolean large = StreamBench.large;
-        List<AssetRef<MeshData>> meshes = cell.sceneMeshes;
-        List<List<AssetRef<MaterialData>>> rockMaterials = cell.sceneMaterials;
-        cell.nodes = new long[INSTANCES_PER_CELL + (large ? 0 : 1)];
-        if (!large) { // the cell's ground tile, after the rocks
-            long ground = scene.create();
-            scene.setTranslation(ground, baseX(cell.key), 0, baseZ(cell.key));
-            renderables.set(ground, Renderable.of(meshes.get(MESHES_PER_CELL), GROUND));
-            cell.nodes[INSTANCES_PER_CELL] = ground;
-        }
-        for (int i = 0; i < INSTANCES_PER_CELL; i++) {
-            long node = scene.create();
-            cell.nodes[i] = node;
-            scene.setTranslation(node, at[4 * i], at[4 * i + 1], at[4 * i + 2]);
-            if (large && i == 0) {
-                renderables.set(node, Renderable.of(meshes.get(0), rockMaterials.get(0)));
-                continue;
-            }
-            double s = at[4 * i + 3];
-            scene.setScale(node, s, s, s);
-            renderables.set(node, Renderable.of(large ? meshes.get(1) : meshes.get(i % MESHES_PER_CELL),
+            batch.setTranslation(node, x, DemoMeshes.height(x, z) + s * 0.6, z);
+            batch.setScale(node, s, s, s);
+            batch.set(node, Renderable.TYPE, Renderable.of(large ? meshes.get(1) : meshes.get(i % MESHES_PER_CELL),
                 rockMaterials.get(i % 2)));
         }
-        cell.sceneMeshes = null;
-        cell.sceneMaterials = null;
+        if (!large) { // the cell's ground tile, after the rocks
+            int ground = batch.add(root);
+            batch.setTranslation(ground, baseX, 0, baseZ);
+            batch.set(ground, Renderable.TYPE, Renderable.of(meshes.get(MESHES_PER_CELL), GROUND));
+        }
+        batch.prepare(); // world transforms here too
+        return batch;
+    }
+
+    /** Puts {@code cell}'s batch into the scene, in one pass, and hands the batch back to the builders. */
+    private void attach(Cell cell) {
+        SceneBatch batch = cell.placing.join();
+        cell.root = scene.attach(batch, NodeHandle.NONE);
+        cellsIn++;
+        cell.rock = scene.firstChild(cell.root);
+        recycle(batch);
     }
 
     /** The baseline: cells built on executor threads and put straight into the pool, textures and materials. */
@@ -562,6 +590,7 @@ final class StreamFlight implements AutoCloseable {
             if (cell.building != null && cell.building.isDone()) {
                 Built built = cell.building.join(); // null: left range before its build began
                 if (built != null) {
+                    cellsIn++;
                     texturesAdded += place(cell, built);
                     cell.freeAt = frames + FREE_AFTER;
                 }
@@ -579,6 +608,7 @@ final class StreamFlight implements AutoCloseable {
             }
             if (!wanted && cell.building == null) {
                 texturesRemoved += cell.texture >= 0 ? 1 : 0;
+                cellsOut += cell.meshes.length > 0 ? 1 : 0;
                 meshesRemoved += clear(cell);
                 cells.set(c, cells.get(cells.size() - 1));
                 cells.remove(cells.size() - 1);

@@ -13,6 +13,7 @@ import com.truesim.scene.assets.AssetCache;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.PathAssets;
 import com.truesim.scene.assets.PathSource;
+import com.truesim.scene.assets.mesh.MeshPool;
 import com.truesim.scene.gltf.Gltf;
 import com.truesim.scene.render.ImageImporter;
 import com.truesim.scene.render.RenderAssets;
@@ -40,10 +41,12 @@ final class DemoAssets implements AutoCloseable {
     private final SceneResources resources;
     private final TaskScheduler tasks; // drained here when standalone; the engine drains its own
     private final boolean owned;
+    private final MeshPool meshPool; // generated meshes let go of, built into again
 
     private DemoAssets(AssetCache cache, PathAssets paths, SceneResources resources, TaskScheduler tasks,
-        boolean owned, EngineSettings settings) {
+        boolean owned, EngineSettings settings, MeshPool meshPool) {
         this.cache = cache;
+        this.meshPool = meshPool;
         this.paths = paths;
         this.resources = resources;
         this.tasks = tasks;
@@ -60,7 +63,8 @@ final class DemoAssets implements AutoCloseable {
 
     /** The engine's assets ({@link Assets}): its cache, paths and resources, with the samples' mount and importers. */
     static DemoAssets of(Assets assets, TaskScheduler engineTasks, EngineSettings settings) {
-        return new DemoAssets(assets.cache(), assets.paths(), assets.resources(), engineTasks, false, settings);
+        return new DemoAssets(assets.cache(), assets.paths(), assets.resources(), engineTasks, false, settings,
+            assets.meshPool());
     }
 
     /** Assets of their own, for a program without an engine: the GPU side on {@code device}. */
@@ -81,7 +85,9 @@ final class DemoAssets implements AutoCloseable {
         Materials materials = new Materials(device, materialCount, slots);
         Textures textures = new Textures(device, slots);
         SceneResources resources = new SceneResources(cache, pool, materials, textures).settings(settings);
-        return new DemoAssets(cache, new PathAssets(cache), resources, tasks, true, settings);
+        MeshPool meshPool = new MeshPool(settings.get(Assets.MESH_POOL)); // as the engine's assets keep one
+        cache.recycler(RenderAssets.MESH, meshPool);
+        return new DemoAssets(cache, new PathAssets(cache), resources, tasks, true, settings, meshPool);
     }
 
     AssetCache cache() {
@@ -96,6 +102,11 @@ final class DemoAssets implements AutoCloseable {
     /** The GPU side, which every scene sync shares. */
     SceneResources resources() {
         return resources;
+    }
+
+    /** Generated meshes the cache let go of, for generators to build into ({@code MeshBuilder.pool}). */
+    MeshPool meshPool() {
+        return meshPool;
     }
 
     GeometryPool pool() {
@@ -149,6 +160,7 @@ final class DemoAssets implements AutoCloseable {
             resources.materials().close();
             resources.pool().close();
             cache.close();
+            meshPool.clear();
             tasks.close();
         }
     }

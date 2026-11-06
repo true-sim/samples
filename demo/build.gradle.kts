@@ -39,6 +39,11 @@ application {
 // The samples' options are settings (DemoSettings), given as --set name=value after the program's own arguments.
 // The -P properties below become those; a model named by file (-Pcharacter=<path to Fox.gltf>) becomes its folder
 // mounted as demo:// and the model's asset path in it. Providers, not args: --args replaces the task's args.
+// -Pset=name=value[,name=value...]: any setting, the engine's too, as --set on the command line (e.g.
+// -Pset=render.interpolation=off)
+fun anySettings(): List<String> = providers.gradleProperty("set").orNull?.split(",")?.filter { it.isNotBlank() }
+    ?.flatMap { listOf("--set", it.trim()) } ?: listOf()
+
 fun settingsOf(vararg names: String): List<String> = names.flatMap { name ->
     providers.gradleProperty(name).orNull?.let { value ->
         if (name == "character" || name == "crowd") {
@@ -74,8 +79,9 @@ tasks.register<JavaExec>("stereoBench") {
     // lights, the circling six and the rest scattered near the middle; -Pfoxes=1000 -Pcrowd=<path to Fox.gltf>
     // [-PfoxLod=true]: a crowd of animated foxes, what animating it costs; -Peye, -Ppng, -PpngFrames, -Pframes,
     // -PcasterDetail, -Procks, -PrebuildEvery: the settings demo.eye and the others
+    // -Pset=name=value,...: any other setting (-Pset=render.interpolation=off)
     val settings = settingsOf("rocks", "png", "casterDetail", "character", "eye", "pngFrames", "frames", "effect",
-        "lights", "foxes", "crowd", "foxLod", "rebuildEvery")
+        "lights", "foxes", "crowd", "foxLod", "rebuildEvery") + anySettings()
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
@@ -95,7 +101,7 @@ tasks.register<JavaExec>("streamBench") {
     // providers, not args: --args replaces the task's args, and these come on top of it
     val settings = listOf("seconds", "range", "speed", "frames", "memory").flatMap { name ->
         providers.gradleProperty(name).orNull?.let { listOf("--set", "demo.$name=$it") } ?: listOf()
-    }
+    } + anySettings() // -Pset=render.streamFrameBudget=0.5,...
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
