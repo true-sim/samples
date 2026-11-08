@@ -93,7 +93,7 @@ public final class TourScript {
         // keys: t, hour, fog, mist, snowfall, snowCover, rain, lamps, rooms
         segments.add(new Segment("dawn", 32, List.of(
             shot("meadow", 0, 17, new double[][] {
-                {0, 12, 0.8, 205, 0, 12, 0}, {17, 6, 1.4, 128, 4, 12, -10}}),
+                {0, 12, 3.5, 205, 0, 8, 0}, {17, 6, 3, 128, 4, 8, -10}}),
             shot("street", 17, 15, new double[][] {
                 {0, 7, 1.8, 76, -2, 4, 0}, {15, 3, 9, 46, -4, 5, -60}})),
             List.of(new double[] {0, 7.35, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 8.15, 0.0005, 0.0015, 0,
@@ -140,7 +140,9 @@ public final class TourScript {
             List.of(new double[] {0, 15.7, 0.0005, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0007, 0, 0, 0, 1,
                 0.3, 0.8}, new double[] {34, 16.3, 0.0008, 0, 0, 0, 1, 0.5, 1}),
             s -> {
-                s.weather = WeatherPreset.RAIN;
+                // a thunderstorm's towering cumulus: their bases hang among the cliffs (the weather's flat world
+                // has its ground at sea level), where rain's nimbostratus would lie on the valley floor
+                s.weather = WeatherPreset.STORM;
                 s.weatherRate = 2;
                 s.fogFalloff = 0.01;
                 s.fires = true;
