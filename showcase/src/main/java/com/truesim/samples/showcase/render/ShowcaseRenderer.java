@@ -273,7 +273,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
      * follows (the first one made). Returns the view.
      */
     public SceneView view(ViewPort port, Camera camera) {
-        SceneView view = geometry.createView(port, camera, ViewOptions.of(1 << 15, 1 << 23).withOcclusion(true))
+        // room for Lauterbrunnen's terrain (some 1,500 tiles of 9,216 triangles to the horizon) and the village:
+        // the renderer drops what does not fit without a word (true-sim/engine#464), which showed as holes
+        SceneView view = geometry.createView(port, camera, ViewOptions.of(1 << 16, 1 << 25).withOcclusion(true))
             .set(1, MeshletRenderer.MODE_LIT);
         boolean visibility = "visibility".equals(settings.get(ShowcaseSettings.SHADING)) && device.primitiveIds();
         if (visibility) {
