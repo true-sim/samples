@@ -62,12 +62,16 @@ public final class Village implements AutoCloseable {
     public static final Layer<Picked> BUILDINGS = Layer.of("buildings", Picked.class, Levels.single(64));
     public static final Layer<Picked> PROPS = Layer.of("props", Picked.class, Levels.single(32));
 
-    /** What the camera asks for. */
-    static final InterestProfile CAMERA = InterestProfile.builder()
-        .layer(GROUND, Detail.bands(380, 1500, 6000, 24000))
-        .layer(BUILDINGS, Detail.full(), Range.radius(3000))
-        .layer(PROPS, Detail.full(), Range.radius(250))
-        .build();
+    /** What the camera asks for: the village's layers, and the made-up valley's ground (effects-terrain follows itself). */
+    static InterestProfile camera(boolean ground) {
+        InterestProfile.Builder b = InterestProfile.builder()
+            .layer(BUILDINGS, Detail.full(), Range.radius(3000))
+            .layer(PROPS, Detail.full(), Range.radius(250));
+        if (ground) {
+            b.layer(GROUND, Detail.bands(380, 1500, 6000, 24000));
+        }
+        return b.build();
+    }
 
     /** A ground cell's tile. */
     public record GroundCell(AssetRef<com.truesim.scene.assets.mesh.MeshData> mesh, double x0, double z0) {
@@ -181,7 +185,7 @@ public final class Village implements AutoCloseable {
         }
         world.register(BUILDINGS, new PickLoader(true));
         world.register(PROPS, new PickLoader(false));
-        camera = world.addInterest(CAMERA, Priority.HIGH);
+        camera = world.addInterest(camera(terrain == null), Priority.HIGH);
     }
 
     /** Waits for Poly Haven's models (every cell spawns from them), at most {@code timeout}. */

@@ -93,10 +93,10 @@ public final class TourScript {
         // keys: t, hour, fog, mist, snowfall, snowCover, rain, lamps, rooms
         segments.add(new Segment("dawn", 32, List.of(
             shot("meadow", 0, 17, new double[][] {
-                {0, -26, 0.7, 190, 12, 14, 10}, {17, -12, 1.3, 118, 14, 12, 0}}),
+                {0, 12, 0.8, 205, 0, 12, 0}, {17, 6, 1.4, 128, 4, 12, -10}}),
             shot("street", 17, 15, new double[][] {
                 {0, 7, 1.8, 76, -2, 4, 0}, {15, 3, 9, 46, -4, 5, -60}})),
-            List.of(new double[] {0, 6.95, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 7.75, 0.0005, 0.0015, 0,
+            List.of(new double[] {0, 7.35, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 8.15, 0.0005, 0.0015, 0,
                 0, 0, 0, 0.3}),
             s -> {
                 s.weather = WeatherPreset.FAIR;
@@ -109,7 +109,7 @@ public final class TourScript {
             }));
         segments.add(new Segment("noon", 42, List.of(
             real ? landscape("jungfrau", 0, 14, new double[][] {
-                {0, -515, 30, 120, 4130, -600, 6330}, {14, -500, 34, 215, 4130, -650, 6330}})
+                {0, -470, 60, 140, 4130, -600, 6330}, {14, -455, 65, 235, 4130, -650, 6330}})
                 : shot("slope", 0, 14, new double[][] {
                     {0, 110, 30, 95, 0, 10, -10}, {14, 82, 22, 50, -10, 6, -30}}),
             shot("square", 14, 15, new double[][] {
@@ -129,13 +129,12 @@ public final class TourScript {
                 s.fStop = 11;
             }));
         segments.add(new Segment("storm", 34, List.of(
-            real ? landscape("up the cliff", 0, 17, new double[][] {
-                {0, ox + 30, 8, oz + 40, ox, 8, oz}, {9, -260, 160, 280, ox, 10, oz}, {17, -470, 25, 270, ox, 10,
-                    oz - 20}})
+            real ? shot("towards the cliff", 0, 17, new double[][] {
+                {0, 30, 6, 40, -150, 150, -20}, {17, 10, 30, 80, -200, 250, -40}})
                 : shot("climb", 0, 17, new double[][] {
                     {0, 30, 6, 40, -20, 6, -10}, {9, 120, 30, 70, -10, 6, -10}, {17, 215, 6, 85, -20, 10, -40}}),
-            real ? landscape("over the valley", 17, 17, new double[][] {
-                {0, -485, 4, 330, 1400, 200, -300}, {17, -480, 4, 230, 1600, 300, 400}})
+            real ? landscape("up the valley", 17, 17, new double[][] {
+                {0, -60, 12, 1300, -120, 60, 0}, {17, -40, 18, 1150, -100, 80, -300}})
                 : shot("ridge", 17, 17, new double[][] {
                     {0, 200, 4, 70, 0, 12, -10}, {17, 182, 4, 25, -10, 12, -40}})),
             List.of(new double[] {0, 15.7, 0.0005, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0007, 0, 0, 0, 1,
@@ -167,9 +166,9 @@ public final class TourScript {
             }));
         segments.add(new Segment("night", 34, List.of(
             shot("fireworks", 0, 16, new double[][] {
-                {0, -6, 1.7, 30, 70, 150, 150}, {16, 2, 1.7, 22, 70, 160, 150}}),
+                {0, 2, 1.7, 8, 10, 150, -150}, {16, -2, 1.7, 3, 10, 160, -150}}),
             shot("village at night", 16, 18, new double[][] {
-                {0, -26, 3, -70, 60, 110, 150}, {18, -12, 3.5, -45, 70, 120, 150}})),
+                {0, -20, 4, 120, 5, 110, -150}, {18, -10, 4, 95, 5, 120, -150}})),
             List.of(new double[] {0, 21.0, 0.0004, 0, 0, 0.95, 0, 1, 1}, new double[] {34, 21.3, 0.0004, 0, 0, 0.95,
                 0, 1, 1}),
             s -> {

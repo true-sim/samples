@@ -110,8 +110,8 @@ public final class DayDriver {
         this.layout = layout;
         fireworks = new FireworksSync(renderer.effects(), settings);
         show = scene.create();
-        double sx = layout.originX() + 70;
-        double sz = layout.originZ() + 150;
+        double sx = layout.originX() + 10;
+        double sz = layout.originZ() - 150;
         scene.setTranslation(show, sx, ground.height(sx, sz), sz);
         weatherFx = scene.create();
         snow = renderer.effects().play(VillageEffects.SNOW, weatherFx).set(VillageEffects.RATE, 0);

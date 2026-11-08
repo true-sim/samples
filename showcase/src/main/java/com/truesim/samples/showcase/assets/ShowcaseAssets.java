@@ -92,7 +92,9 @@ public final class ShowcaseAssets implements AutoCloseable {
         GeometryPool pool = new GeometryPool(device, GeometryPool.Capacity.of(1 << 24, 1 << 18, 1 << 13), slots);
         Materials materials = new Materials(device, 4096, slots);
         Textures textures = new Textures(device, slots);
+        // whole: a renderable shows once its materials' textures are there too, so nothing pops in untextured
         SceneResources resources = new SceneResources(cache, pool, materials, textures).settings(settings)
+            .loading(SceneResources.Loading.WHOLE)
             .prepareOn(tasks, Math.max(2, Runtime.getRuntime().availableProcessors() / 4));
         MeshPool meshPool = new MeshPool(settings.get(Assets.MESH_POOL));
         cache.recycler(RenderAssets.MESH, meshPool);
