@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase;
 
+import com.truesim.common.math.Maths;
 import com.truesim.effects.weather.WeatherPreset;
 import com.truesim.engine.app.AppConfig;
 import com.truesim.engine.app.Application;
@@ -148,8 +149,8 @@ public final class ShowcaseApp implements Application, PlatformListener {
         double speed = (player.down(ShowcaseActions.FAST) ? 60 : 8) * dt;
         double forward = player.y(ShowcaseActions.MOVE);
         double right = player.x(ShowcaseActions.MOVE);
-        x += (Math.sin(yaw) * forward - Math.cos(yaw) * right) * speed;
-        z += (Math.cos(yaw) * forward + Math.sin(yaw) * right) * speed;
+        x += (Maths.sin(yaw) * forward - Maths.cos(yaw) * right) * speed;
+        z += (Maths.cos(yaw) * forward + Maths.sin(yaw) * right) * speed;
         y = Math.max(y + player.value(ShowcaseActions.RISE) * speed, world.world.ground().height(x, z) + 0.4);
         if (player.pressed(ShowcaseActions.EARLIER)) {
             state.hour = (state.hour + 23) % 24;
@@ -241,7 +242,7 @@ public final class ShowcaseApp implements Application, PlatformListener {
             ViewPort port = graph.addView("main");
             window = startup.get(Desktop.KEY).platform().createWindow(WindowOptions.of("true-sim showcase", 1600,
                 900), startup.settings().scoped("main"));
-            rig = new CameraRig(world.renderer().scene(), port, Math.toRadians(60), 0.1);
+            rig = new CameraRig(world.renderer().scene(), port, Maths.toRadians(60), 0.1);
             world.view(port, rig.camera());
             rendering.presenter().outputTransform(new DisplayTransform().displayEffects()).present(port,
                 Keys.SCENE_COLOR, window);

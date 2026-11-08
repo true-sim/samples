@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import com.truesim.scene.effects.ParticleWorld;
 
 /**
@@ -28,8 +29,8 @@ public interface Ground extends ParticleWorld {
 
     /** The lowest height under a footprint {@code w} by {@code d} metres about ({@code x}, {@code z}), turned by {@code yaw}. */
     default double lowest(double x, double z, double w, double d, double yaw) {
-        double c = Math.cos(yaw);
-        double s = Math.sin(yaw);
+        double c = Maths.cos(yaw);
+        double s = Maths.sin(yaw);
         double lowest = Double.MAX_VALUE;
         for (int i = -2; i <= 2; i++) {
             for (int j = -2; j <= 2; j++) {

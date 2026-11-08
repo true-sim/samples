@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase;
 
+import com.truesim.common.math.Maths;
 import com.truesim.effects.atmosphere.ephemeris.Observer;
 import com.truesim.effects.atmosphere.render.AtmosphereSky;
 import com.truesim.effects.atmosphere.sky.SkyComponents;
@@ -77,7 +78,7 @@ public final class ShowcaseProbe {
                 Instant midnight = Instant.parse("2026-10-23T22:00:00Z"); // local midnight, CEST
                 scene.components().set(world.skyNode(), SkyComponents.SKY_TIME, SkyTime.of(midnight, 1));
                 settings.set(AtmosphereSky.ATMOSPHERE.setting("ev100"), 13f);
-                settings.set(AutoExposure.HISTOGRAM.setting("luminanceScale"), (float) (1.2 * Math.pow(2, 13)));
+                settings.set(AutoExposure.HISTOGRAM.setting("luminanceScale"), (float) (1.2 * Maths.pow(2, 13)));
                 settings.set(AutoExposure.HISTOGRAM.setting("key"), AutoExposure.KeyValue.KRAWCZYK);
 
                 Camera camera = new Camera();
@@ -88,7 +89,7 @@ public final class ShowcaseProbe {
                 port.add(stats);
                 try (FrameCapture capture = new FrameCapture(device, port); stats) {
                     double h0 = ground.height(0, 20);
-                    camera.position(0, h0 + 1.7, 20).set(0.1, 0.02, -1, 0, 1, 0, Math.toRadians(60), 1280, 720,
+                    camera.position(0, h0 + 1.7, 20).set(0.1, 0.02, -1, 0, 1, 0, Maths.toRadians(60), 1280, 720,
                         0.1);
                     for (int f = 0; f < 240; f++) {
                         world.update(1 / 60.0, 1 / 60.0, hour * 3600 + f / 60.0, camera);

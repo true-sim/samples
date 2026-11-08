@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import com.truesim.common.jobs.TaskScheduler;
 import com.truesim.effects.terrain.data.SurfaceParameters;
 import com.truesim.effects.terrain.data.TerrainAssets;
@@ -89,7 +90,7 @@ public final class TerrainMap {
             double[] n = new double[3];
             surface.normalAt(x, z, 2, n);
             System.out.printf("  %s: %.1f m, slope %.0f deg%n", args[a], surface.heightAt(x, z, 2),
-                Math.toDegrees(Math.acos(n[1])));
+                Maths.toDegrees(Maths.acos(n[1])));
         }
     }
 }

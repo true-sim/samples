@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import com.truesim.common.math.Vec3;
 import com.truesim.effects.atmosphere.fog.IndoorZone;
 import com.truesim.samples.showcase.assets.ShowcaseAssets;
@@ -367,8 +368,8 @@ public final class Village implements AutoCloseable {
     private double floorOf(Building b) {
         // the ground floor at the highest ground under the footprint, a little above: the plinth fills the rest
         double highest = -Double.MAX_VALUE;
-        double c = Math.cos(b.yaw());
-        double s = Math.sin(b.yaw());
+        double c = Maths.cos(b.yaw());
+        double s = Maths.sin(b.yaw());
         for (int i = -2; i <= 2; i++) {
             for (int j = -2; j <= 2; j++) {
                 double lx = b.spec().width() * i / 4;
@@ -381,7 +382,7 @@ public final class Village implements AutoCloseable {
 
     private void place(long node, double x, double y, double z, double yaw) {
         scene.setTranslation(node, x, y, z);
-        scene.setRotation(node, 0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2));
+        scene.setRotation(node, 0, Maths.sin(yaw / 2), 0, Maths.cos(yaw / 2));
     }
 
     private void building(Building b, CellContent content) {
@@ -465,8 +466,8 @@ public final class Village implements AutoCloseable {
     private void fence(VillageLayout.Fence f, CellContent content) {
         double dx = f.x1() - f.x0();
         double dz = f.z1() - f.z0();
-        double length = Math.hypot(dx, dz);
-        double yaw = Math.atan2(-dz, dx); // local +x along the fence
+        double length = Math.sqrt(dx * dx + dz * dz);
+        double yaw = Maths.atan2(-dz, dx); // local +x along the fence
         int sections = (int) Math.ceil(length / 12);
         for (int i = 0; i < sections; i++) {
             double t = (double) i / sections;

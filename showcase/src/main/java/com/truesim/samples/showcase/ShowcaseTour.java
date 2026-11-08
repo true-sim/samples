@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase;
 
+import com.truesim.common.math.Maths;
 import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.GpuTimings;
 import com.truesim.engine.graph.ViewPort;
@@ -67,7 +68,7 @@ public final class ShowcaseTour {
             try (ShowcaseAssets assets = ShowcaseAssets.standalone(device, graph.frameSlots(), settings);
                  ShowcaseWorld world = new ShowcaseWorld(device, graph, assets)) {
                 ViewPort port = graph.addView("main").size(width, height);
-                CameraRig rig = new CameraRig(world.renderer().scene(), port, Math.toRadians(55), 0.1);
+                CameraRig rig = new CameraRig(world.renderer().scene(), port, Maths.toRadians(55), 0.1);
                 world.view(port, rig.camera());
                 SceneStats stats = new SceneStats(device, width, height);
                 port.add(stats);

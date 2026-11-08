@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.day;
 
+import com.truesim.common.math.Maths;
 import com.truesim.common.math.Vec3;
 import com.truesim.effects.atmosphere.ephemeris.Observer;
 import com.truesim.effects.atmosphere.fog.AtmosphereFog;
@@ -244,7 +245,7 @@ public final class DayDriver {
         double target = Math.clamp(AtmosphereExposure.ev100(luminance), -3, 15);
         ev = first ? target : AtmosphereExposure.adapt(ev, target, seconds, 1.5);
         settings.set(AtmosphereSky.ATMOSPHERE.setting("ev100"), (float) ev);
-        settings.set(AutoExposure.HISTOGRAM.setting("luminanceScale"), (float) (1.2 * Math.pow(2, ev)));
+        settings.set(AutoExposure.HISTOGRAM.setting("luminanceScale"), (float) (1.2 * Maths.pow(2, ev)));
     }
 
     /** The pre-exposure now, EV100. */

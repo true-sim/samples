@@ -99,7 +99,7 @@ public final class VillageMeshes {
             double[] b = line.get(i + 1);
             double dx = b[0] - a[0];
             double dz = b[1] - a[1];
-            double length = Math.hypot(dx, dz);
+            double length = Math.sqrt(dx * dx + dz * dz);
             int steps = (int) Math.ceil(length / 1.0);
             double nx = -dz / length;
             double nz = dx / length;

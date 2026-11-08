@@ -1,5 +1,7 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
+
 /**
  * The temporary ground until effects-terrain's real elevation data lands: an Alpine valley made from functions. The
  * valley runs north-south (the world's -z is north), its floor rising gently northwards, a stream bed meandering down
@@ -18,7 +20,7 @@ public final class ValleyGround implements Ground {
         double across = Math.abs(x - axis);
         double floor = -0.012 * z; // rising northwards (-z)
         // The flanks: level for 50 m, then a meadow rising, steepening into forest towards the ridges
-        double flank = across <= 50 ? 0 : 520 * (1 - Math.exp(-sq((across - 50) / 520))) + 0.02 * sq(across - 50) / 10;
+        double flank = across <= 50 ? 0 : 520 * (1 - Maths.exp(-sq((across - 50) / 520))) + 0.02 * sq(across - 50) / 10;
         // The mountains beyond the ridges, ridged noise growing with distance
         double far = Math.max(Math.max(0, across - 900) / 2200, Math.max(0, Math.abs(z) - 6500) / 3500);
         double mountains = 2600 * smooth(Math.min(far, 1)) * (0.55 + 0.45 * ridged(x * 0.00045, z * 0.00045, 5));
@@ -29,13 +31,13 @@ public final class ValleyGround implements Ground {
             + 14 * smooth(Math.clamp(across / 300, 0, 1)) * fbm(x / 400 - 3.3, z / 400 + 1.9, 4));
         // A stream bed down the valley, east of the village
         double stream = Math.abs(x - axis - 95);
-        double bed = -1.6 * Math.exp(-sq(stream / 6));
+        double bed = -1.6 * Maths.exp(-sq(stream / 6));
         return floor + flank + mountains + relief + bed;
     }
 
     /** Where the valley's axis lies across at {@code z}: it bends a little. */
     private static double meander(double z) {
-        return 40 * Math.sin(z / 900) + 25 * Math.sin(z / 370 + 1.3) - 25 * Math.sin(1.3);
+        return 40 * Maths.sin(z / 900) + 25 * Maths.sin(z / 370 + 1.3) - 25 * Maths.sin(1.3);
     }
 
     private static double sq(double v) {
@@ -94,7 +96,7 @@ public final class ValleyGround implements Ground {
     private static double grad(int ix, int iz, double fx, double fz) {
         int h = hash(ix, iz);
         double angle = (h & 0xffff) / 65536.0 * 2 * Math.PI;
-        return Math.cos(angle) * fx + Math.sin(angle) * fz;
+        return Maths.cos(angle) * fx + Maths.sin(angle) * fz;
     }
 
     static int hash(int x, int z) {

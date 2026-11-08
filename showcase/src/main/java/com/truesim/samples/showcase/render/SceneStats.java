@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.render;
 
+import com.truesim.common.math.Maths;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_ASPECT_COLOR_BIT;
@@ -89,11 +90,11 @@ public final class SceneStats implements Technique, AutoCloseable {
             }
             double y = 0.2126 * r + 0.7152 * gr + 0.0722 * b;
             max = Math.max(max, y);
-            logSum += Math.log(Math.max(y, 1e-9));
+            logSum += Maths.log(Math.max(y, 1e-9));
             counted++;
         }
         return String.format(Locale.ROOT, "scene color: %d NaN, %d inf, log-average %.4g, max %.4g", nan, inf,
-            counted > 0 ? Math.exp(logSum / counted) : Double.NaN, max);
+            counted > 0 ? Maths.exp(logSum / counted) : Double.NaN, max);
     }
 
     /** The log-average luminance of the last frame, scene units (NaN and infinite pixels left out). */
@@ -107,11 +108,11 @@ public final class SceneStats implements Technique, AutoCloseable {
             float b = Float.float16ToFloat(m.get(ValueLayout.JAVA_SHORT_UNALIGNED, 8L * i + 4));
             double y = 0.2126 * r + 0.7152 * gr + 0.0722 * b;
             if (Double.isFinite(y)) {
-                logSum += Math.log(Math.max(y, 1e-9));
+                logSum += Maths.log(Math.max(y, 1e-9));
                 counted++;
             }
         }
-        return counted > 0 ? Math.exp(logSum / counted) : Double.NaN;
+        return counted > 0 ? Maths.exp(logSum / counted) : Double.NaN;
     }
 
     @Override

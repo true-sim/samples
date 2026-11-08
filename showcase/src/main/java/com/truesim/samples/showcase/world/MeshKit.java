@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import com.truesim.scene.assets.mesh.MeshData;
 import com.truesim.scene.assets.mesh.VertexAttribute;
 import com.truesim.scene.assets.mesh.VertexFormat;
@@ -180,16 +181,16 @@ public final class MeshKit {
         for (int i = 0; i < sides; i++) {
             double a0 = 2 * Math.PI * i / sides;
             double a1 = 2 * Math.PI * (i + 1) / sides;
-            double[] p0 = p(base[0] + r0 * Math.cos(a0), base[1], base[2] + r0 * Math.sin(a0));
-            double[] p1 = p(base[0] + r0 * Math.cos(a1), base[1], base[2] + r0 * Math.sin(a1));
-            double[] q0 = p(base[0] + r1 * Math.cos(a0), base[1] + height, base[2] + r1 * Math.sin(a0));
-            double[] q1 = p(base[0] + r1 * Math.cos(a1), base[1] + height, base[2] + r1 * Math.sin(a1));
+            double[] p0 = p(base[0] + r0 * Maths.cos(a0), base[1], base[2] + r0 * Maths.sin(a0));
+            double[] p1 = p(base[0] + r0 * Maths.cos(a1), base[1], base[2] + r0 * Maths.sin(a1));
+            double[] q0 = p(base[0] + r1 * Maths.cos(a0), base[1] + height, base[2] + r1 * Maths.sin(a0));
+            double[] q1 = p(base[0] + r1 * Maths.cos(a1), base[1] + height, base[2] + r1 * Maths.sin(a1));
             // smooth normals around: each vertex's own
             double slope = (r0 - r1) / height;
-            double[] n0 = normalize(p(Math.cos(a0), slope, Math.sin(a0)));
-            double[] n1 = normalize(p(Math.cos(a1), slope, Math.sin(a1)));
-            double[] t0 = p(-Math.sin(a0), 0, Math.cos(a0));
-            double[] t1 = p(-Math.sin(a1), 0, Math.cos(a1));
+            double[] n0 = normalize(p(Maths.cos(a0), slope, Maths.sin(a0)));
+            double[] n1 = normalize(p(Maths.cos(a1), slope, Maths.sin(a1)));
+            double[] t0 = p(-Maths.sin(a0), 0, Maths.cos(a0));
+            double[] t1 = p(-Maths.sin(a1), 0, Maths.cos(a1));
             double arc = 2 * Math.PI * Math.max(r0, r1) / sides / texture;
             double u = (i * arc) % 1.0;
             int b = part.vertices();

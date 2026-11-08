@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.tour;
 
+import com.truesim.common.math.Maths;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
 import com.truesim.engine.scene.CameraSync;
@@ -39,17 +40,17 @@ public final class CameraRig {
         double dy = ty - y;
         double dz = tz - z;
         double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        place(x, y, z, Math.atan2(dx, dz), Math.asin(dy / length));
+        place(x, y, z, Maths.atan2(dx, dz), Maths.asin(dy / length));
     }
 
     /** At ({@code x}, {@code y}, {@code z}) facing {@code yaw} (radians from +z towards +x) and {@code pitch} up. */
     public void place(double x, double y, double z, double yaw, double pitch) {
         double a = (yaw + Math.PI) / 2;
         double b = pitch / 2;
-        double cy = Math.cos(a);
-        double sy = Math.sin(a);
-        double cx = Math.cos(b);
-        double sx = Math.sin(b);
+        double cy = Maths.cos(a);
+        double sy = Maths.sin(a);
+        double cx = Maths.cos(b);
+        double sx = Maths.sin(b);
         scene.setTranslation(node, x, y, z);
         scene.setRotation(node, cy * sx, sy * cx, -sy * sx, cy * cx);
     }

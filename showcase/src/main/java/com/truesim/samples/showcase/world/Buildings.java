@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import static com.truesim.samples.showcase.world.MeshKit.p;
 
 import com.truesim.scene.assets.AssetRef;
@@ -54,7 +55,7 @@ public final class Buildings {
 
         /** The height of the roof's ridge above the ground floor. */
         public double ridge() {
-            return eaves() + (width / 2 + ROOF_OVERHANG) * Math.tan(Math.toRadians(pitch));
+            return eaves() + (width / 2 + ROOF_OVERHANG) * Maths.tan(Maths.toRadians(pitch));
         }
     }
 
@@ -176,8 +177,8 @@ public final class Buildings {
             shutters(kit, p(-hw, 0, -hd), p(0, 0, 1), side);
         }
         // gables: the upper walls' triangles up to the roof, front and back, timber
-        double rise = (hw + ROOF_OVERHANG) * Math.tan(Math.toRadians(spec.pitch()));
-        double gableTop = top + hw * Math.tan(Math.toRadians(spec.pitch()));
+        double rise = (hw + ROOF_OVERHANG) * Maths.tan(Maths.toRadians(spec.pitch()));
+        double gableTop = top + hw * Maths.tan(Maths.toRadians(spec.pitch()));
         for (double z : new double[] {hd, -hd}) {
             double s = Math.signum(z);
             kit.to(upperOuter).triangle(p(-hw * s, top, z), p(hw * s, top, z), p(0, gableTop, z), 2);
@@ -344,12 +345,12 @@ public final class Buildings {
 
     /** The gable roof: two slabs from the eaves (overhanging) to the ridge, their undersides and edges. */
     private static void roof(MeshKit kit, Spec spec, double hw, double hd, double top, double rise) {
-        double pitch = Math.toRadians(spec.pitch());
+        double pitch = Maths.toRadians(spec.pitch());
         double run = hw + ROOF_OVERHANG;
-        double slope = run / Math.cos(pitch);
+        double slope = run / Maths.cos(pitch);
         double thick = 0.22;
         double len = 2 * (hd + ROOF_OVERHANG);
-        double eave = top - ROOF_OVERHANG * Math.tan(pitch) + 0.15;
+        double eave = top - ROOF_OVERHANG * Maths.tan(pitch) + 0.15;
         double ridge = eave + rise;
         for (int side = -1; side <= 1; side += 2) {
             double[] lowEdge = p(side * run, eave, hd + ROOF_OVERHANG);
@@ -437,8 +438,8 @@ public final class Buildings {
         wall(kit, p(-hw, 0, -hd), p(0, 0, 1), d, h, 0.7, tall, UPPER, INTERIOR, STONE, true);
         kit.to(FLOOR).rect(p(-hw + 0.7, 0.02, hd - 0.7), p(w - 1.4, 0, 0), p(0, 0, -(d - 1.4)), 2);
         kit.to(TRIM).rect(p(-hw + 0.7, h - 0.05, -hd + 0.7), p(w - 1.4, 0, 0), p(0, 0, d - 1.4), 2);
-        double rise = (hw + ROOF_OVERHANG) * Math.tan(Math.toRadians(spec.pitch()));
-        double gableTop = h + hw * Math.tan(Math.toRadians(spec.pitch()));
+        double rise = (hw + ROOF_OVERHANG) * Maths.tan(Maths.toRadians(spec.pitch()));
+        double gableTop = h + hw * Maths.tan(Maths.toRadians(spec.pitch()));
         for (double z : new double[] {hd, -hd}) {
             double s = Math.signum(z);
             kit.to(UPPER).triangle(p(-hw * s, h, z), p(hw * s, h, z), p(0, gableTop, z), 3);

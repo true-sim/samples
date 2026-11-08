@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase.world;
 
+import com.truesim.common.math.Maths;
 import com.truesim.samples.showcase.world.Buildings.Kind;
 import com.truesim.samples.showcase.world.Buildings.Spec;
 import java.util.ArrayList;
@@ -213,7 +214,7 @@ public final class VillageLayout {
         }
         double[] n = new double[3];
         ground.normal(x + originX, z + originZ, n);
-        return n[1] >= Math.cos(Math.toRadians(degrees));
+        return n[1] >= Maths.cos(Maths.toRadians(degrees));
     }
 
     /** Where the square lies in the world. */
@@ -268,8 +269,8 @@ public final class VillageLayout {
 
     /** The ground plan position of ({@code lx}, {@code lz}) in building {@code b}'s frame, into {@code out}. */
     public static void toWorld(Building b, double lx, double lz, double[] out) {
-        double c = Math.cos(b.yaw());
-        double s = Math.sin(b.yaw());
+        double c = Maths.cos(b.yaw());
+        double s = Maths.sin(b.yaw());
         out[0] = b.x() + lx * c + lz * s;
         out[1] = b.z() - lx * s + lz * c;
     }

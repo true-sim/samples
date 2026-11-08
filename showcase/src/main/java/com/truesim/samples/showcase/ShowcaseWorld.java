@@ -1,5 +1,6 @@
 package com.truesim.samples.showcase;
 
+import com.truesim.common.math.Maths;
 import com.truesim.engine.graph.FrameGraph;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
@@ -76,7 +77,7 @@ public final class ShowcaseWorld implements AutoCloseable {
      * it, the day's lights, weather and effects, then the renderer's syncs. Before the graph records.
      */
     public void frame(double seconds, DayState state, Camera camera, double viewportHeight) {
-        village.update(camera.position(0), camera.position(1), camera.position(2), Math.toRadians(60),
+        village.update(camera.position(0), camera.position(1), camera.position(2), Maths.toRadians(60),
             viewportHeight);
         day.apply(state, camera, seconds);
         renderer.update(seconds, seconds * state.weatherRate, DayDriver.gameSeconds(state), camera);
