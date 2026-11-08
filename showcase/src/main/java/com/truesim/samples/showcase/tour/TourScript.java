@@ -115,8 +115,8 @@ public final class TourScript {
             shot("square", 14, 15, new double[][] {
                 {0, -1, 1.7, 32, 1, 2.5, -14}, {15, 0.5, 1.7, 0, 1.5, 2, -14}}),
             shot("cafe window", 29, 13, new double[][] {
-                {0, 0.9, 1.5, -9.6, 0.6, 1.4, -22.5}, {6, 0.2, 1.45, -12.9, 1, 1.5, -22.5}, {13, 0, 1.4, -16.6,
-                    1.4, 1.6, -22.5}})),
+                {0, 1.9, 1.7, -9.6, 1.6, 1.6, -22.5}, {6, 1.2, 1.75, -12.9, 2, 1.7, -22.5}, {13, 1, 1.8, -16.6,
+                    2.4, 1.8, -22.5}})),
             List.of(new double[] {0, 12.7, 0.00025, 0, 0, 0, 0, 0, 0}, new double[] {29, 13.2, 0.00025, 0, 0, 0, 0, 0,
                 0.9}, new double[] {42, 13.4, 0.00025, 0, 0, 0, 0, 0, 1}),
             s -> {
@@ -140,9 +140,8 @@ public final class TourScript {
             List.of(new double[] {0, 15.7, 0.0005, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0007, 0, 0, 0, 1,
                 0.3, 0.8}, new double[] {34, 16.3, 0.0008, 0, 0, 0, 1, 0.5, 1}),
             s -> {
-                // broken stratocumulus and a storm cell: their bases hang among the cliffs (the weather's flat world
-                // has its ground at sea level), where rain's nimbostratus would lie on the valley floor
-                s.weather = WeatherPreset.BROKEN;
+                // nimbostratus over the valley (lifted to its floor) and a storm cell in it
+                s.weather = WeatherPreset.RAIN;
                 s.weatherRate = 2;
                 s.fogFalloff = 0.01;
                 s.fires = true;
@@ -158,7 +157,7 @@ public final class TourScript {
             List.of(new double[] {0, 18.1, 0.0003, 0, 0.4, 0.15, 0, 1, 1}, new double[] {14, 18.3, 0.0004, 0, 0.9,
                 0.75, 0, 1, 1}, new double[] {36, 18.6, 0.0005, 0, 1, 1, 0, 1, 1}),
             s -> {
-                s.weather = WeatherPreset.ALTOSTRATUS; // overcast's stratus would lie in the valley (as above)
+                s.weather = WeatherPreset.ALTOSTRATUS;
                 s.weatherRate = 3;
                 s.fogFalloff = 0.02;
                 s.fires = true;

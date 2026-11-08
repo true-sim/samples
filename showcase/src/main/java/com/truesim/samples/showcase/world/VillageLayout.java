@@ -102,10 +102,12 @@ public final class VillageLayout {
             props.add(new Prop("outdoor_table_chair_set_01", -7 + 6.5 * i, 0, -SQUARE_Z + 2.6, 0.3 * i - 0.2, 1,
                 null));
         }
-        props.add(new Prop("potted_plant_01", -1.3, 0, 5.15, 0, 1, "cafe"));
-        props.add(new Prop("potted_plant_01", 1.3, 0, 5.15, 0.8, 1, "cafe"));
-        props.add(new Prop("planter_box_01", -5.6, 0, 5.2, 0, 1.2, "cafe"));
-        props.add(new Prop("planter_box_01", 4.9, 0, 5.2, 0, 1.2, "cafe"));
+        // on the square before the café's front (its plinth stands above the sloping square)
+        double front = -SQUARE_Z - 5.3 + 9.5 / 2 + 0.55;
+        props.add(new Prop("potted_plant_01", 1 - 1.3, 0, front, 0, 1, null));
+        props.add(new Prop("potted_plant_01", 1 + 1.3, 0, front, 0.8, 1, null));
+        props.add(new Prop("planter_box_01", 1 - 5.6, 0, front, 0, 1.2, null));
+        props.add(new Prop("planter_box_01", 1 + 4.9, 0, front, 0, 1.2, null));
         for (int i = 0; i < 3; i++) {
             double x = -4.2 + 4.2 * i;
             props.add(new Prop("round_wooden_table_01", x, 0, 0.6, 0, 0.75, "cafe"));

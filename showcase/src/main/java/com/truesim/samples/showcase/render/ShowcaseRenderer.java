@@ -190,8 +190,8 @@ public final class ShowcaseRenderer implements AutoCloseable {
         regions = new FogRegions(scene);
         Quality clouds = clouds(quality);
         weather = new Weather(WeatherConfig.forQuality(clouds), WeatherDomain.flat(), WeatherPreset.FAIR);
-        weatherGpu = own(new WeatherGpu(device, slots, assets.resources().textures(), weather, CloudTypes.physical(),
-            CloudsConfig.forQuality(clouds), settings));
+        weatherGpu = own(new WeatherGpu(device, slots, assets.resources().textures(), weather,
+            lifted(CloudTypes.physical(), ground.height(0, 0)), CloudsConfig.forQuality(clouds), settings));
         cloudLighting = new AtmosphereLighting(atmosphere);
         bolts = own(new LightningBolts(device, slots, weatherGpu, 3, 400));
         flashes = new LightningLights(scene, com.truesim.scene.core.NodeHandle.NONE, 4, 30_000);
@@ -214,6 +214,22 @@ public final class ShowcaseRenderer implements AutoCloseable {
      */
     static Quality clouds(Quality quality) {
         return quality == Quality.HIGH ? Quality.ULTRA : quality;
+    }
+
+    /**
+     * The cloud types with their layers lifted by {@code ground} metres: the weather's flat world has its ground at
+     * y 0, while effects-terrain's y is the altitude above the sea, the valley floor some 800 m up; lifted, the clouds'
+     * bases stand above the valley floor as their profiles mean them to.
+     */
+    static CloudTypes lifted(CloudTypes types, double ground) {
+        if (!(ground > 1)) {
+            return types;
+        }
+        for (com.truesim.effects.weather.clouds.CloudType type : com.truesim.effects.weather.clouds.CloudType.values()) {
+            com.truesim.effects.weather.clouds.CloudProfile p = types.profile(type);
+            types = types.with(type, p.withLayer(p.base() + ground, p.top() + ground));
+        }
+        return types;
     }
 
     /** The preset named ({@code low}, {@code medium}, {@code high}, {@code ultra}). */
