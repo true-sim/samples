@@ -165,7 +165,8 @@ public final class Village implements AutoCloseable {
             }
         }
         world = new World(scene, assets.tasks());
-        world.setAttachBudget(24);
+        // no attach budget: the world's budget is every layer's, and terrain tiles waiting behind the village's cells
+        // left holes in the far mountains
         if (site != null) {
             // effects-terrain's tiles: its own layer of the same world, its own interest following the camera
             com.truesim.common.math.color.Color white = new com.truesim.common.math.color.Color(1, 1, 1, 1);

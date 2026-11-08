@@ -117,8 +117,8 @@ public final class TourScript {
             shot("cafe window", 29, 13, new double[][] {
                 {0, 0.9, 1.5, -9.6, 0.6, 1.4, -22.5}, {6, 0.2, 1.45, -12.9, 1, 1.5, -22.5}, {13, 0, 1.4, -16.6,
                     1.4, 1.6, -22.5}})),
-            List.of(new double[] {0, 12.7, 0.00025, 0, 0, 0, 0, 0, 0}, new double[] {42, 13.4, 0.00025, 0, 0, 0, 0, 0,
-                0.4}),
+            List.of(new double[] {0, 12.7, 0.00025, 0, 0, 0, 0, 0, 0}, new double[] {29, 13.2, 0.00025, 0, 0, 0, 0, 0,
+                0.9}, new double[] {42, 13.4, 0.00025, 0, 0, 0, 0, 0, 1}),
             s -> {
                 s.weather = WeatherPreset.SCATTERED;
                 s.weatherRate = 15;
@@ -129,20 +129,20 @@ public final class TourScript {
                 s.fStop = 11;
             }));
         segments.add(new Segment("storm", 34, List.of(
-            real ? shot("towards the cliff", 0, 17, new double[][] {
-                {0, 30, 6, 40, -150, 150, -20}, {17, 10, 30, 80, -200, 250, -40}})
+            real ? shot("rain in the street", 0, 17, new double[][] {
+                {0, -3, 2.2, 62, 0, 5, 0}, {17, -2, 2, 34, 2, 6, -10}})
                 : shot("climb", 0, 17, new double[][] {
                     {0, 30, 6, 40, -20, 6, -10}, {9, 120, 30, 70, -10, 6, -10}, {17, 215, 6, 85, -20, 10, -40}}),
             real ? landscape("up the valley", 17, 17, new double[][] {
-                {0, -60, 12, 1300, -120, 60, 0}, {17, -40, 18, 1150, -100, 80, -300}})
+                {0, -90, 6, 900, -130, 60, 0}, {17, -80, 8, 780, -120, 80, -200}})
                 : shot("ridge", 17, 17, new double[][] {
                     {0, 200, 4, 70, 0, 12, -10}, {17, 182, 4, 25, -10, 12, -40}})),
             List.of(new double[] {0, 15.7, 0.0005, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0007, 0, 0, 0, 1,
                 0.3, 0.8}, new double[] {34, 16.3, 0.0008, 0, 0, 0, 1, 0.5, 1}),
             s -> {
-                // a thunderstorm's towering cumulus: their bases hang among the cliffs (the weather's flat world
+                // broken stratocumulus and a storm cell: their bases hang among the cliffs (the weather's flat world
                 // has its ground at sea level), where rain's nimbostratus would lie on the valley floor
-                s.weather = WeatherPreset.STORM;
+                s.weather = WeatherPreset.BROKEN;
                 s.weatherRate = 2;
                 s.fogFalloff = 0.01;
                 s.fires = true;
@@ -158,7 +158,7 @@ public final class TourScript {
             List.of(new double[] {0, 18.1, 0.0003, 0, 0.4, 0.15, 0, 1, 1}, new double[] {14, 18.3, 0.0004, 0, 0.9,
                 0.75, 0, 1, 1}, new double[] {36, 18.6, 0.0005, 0, 1, 1, 0, 1, 1}),
             s -> {
-                s.weather = WeatherPreset.OVERCAST;
+                s.weather = WeatherPreset.ALTOSTRATUS; // overcast's stratus would lie in the valley (as above)
                 s.weatherRate = 3;
                 s.fogFalloff = 0.02;
                 s.fires = true;
