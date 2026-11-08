@@ -83,7 +83,7 @@ class ShowcasePlanTest {
         // made as the class loads: an effect asking more than its capacity, or naming an unknown module, throws
         assertThat(java.util.List.of(com.truesim.samples.showcase.fx.VillageEffects.HEARTH,
             com.truesim.samples.showcase.fx.VillageEffects.CHIMNEY, com.truesim.samples.showcase.fx.VillageEffects.SNOW,
-            com.truesim.samples.showcase.fx.VillageEffects.RAIN, com.truesim.samples.showcase.fx.VillageEffects.LAUNCH))
+            com.truesim.samples.showcase.fx.VillageEffects.RAIN))
             .doesNotContainNull();
     }
 

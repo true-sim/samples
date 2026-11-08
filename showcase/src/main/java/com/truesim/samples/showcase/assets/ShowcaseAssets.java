@@ -48,6 +48,7 @@ public final class ShowcaseAssets implements AutoCloseable {
     private final boolean owned;
     private final MeshPool meshPool;
     private final Path folder;
+    private final Path terrain;
 
     private ShowcaseAssets(AssetCache cache, PathAssets paths, SceneResources resources, TaskScheduler tasks,
         boolean owned, EngineSettings settings, MeshPool meshPool) {
@@ -69,6 +70,11 @@ public final class ShowcaseAssets implements AutoCloseable {
             paths.importers().add(RenderAssets.TEXTURE, extension, ImageImporter.INSTANCE);
         }
         SkyAssets.install(paths);
+        com.truesim.effects.terrain.data.TerrainAssets.register(paths);
+        terrain = Path.of(settings.get(ShowcaseSettings.TERRAIN));
+        if (Files.isRegularFile(terrain.resolve("sites/lauterbrunnen/site.terrain"))) {
+            com.truesim.effects.terrain.data.TerrainAssets.mount(paths, terrain);
+        }
         PostTextures.install(paths);
     }
 
@@ -97,6 +103,11 @@ public final class ShowcaseAssets implements AutoCloseable {
     public ShowcaseAssets rayTracing(RayTracing rays) {
         resources.rayTracing(rays, mesh -> Math.max(0, mesh.levels().size() - 2));
         return this;
+    }
+
+    /** Whether effects-terrain's cache holds the Lauterbrunnen site. */
+    public boolean terrain() {
+        return Files.isRegularFile(terrain.resolve("sites/lauterbrunnen/site.terrain"));
     }
 
     /** Whether Poly Haven's cache is there (else plain stand-ins draw). */

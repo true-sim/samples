@@ -20,7 +20,7 @@ public final class ValleyGround implements Ground {
         // The flanks: level for 50 m, then a meadow rising, steepening into forest towards the ridges
         double flank = across <= 50 ? 0 : 520 * (1 - Math.exp(-sq((across - 50) / 520))) + 0.02 * sq(across - 50) / 10;
         // The mountains beyond the ridges, ridged noise growing with distance
-        double far = Math.max(0, across - 900) / 2200;
+        double far = Math.max(Math.max(0, across - 900) / 2200, Math.max(0, Math.abs(z) - 6500) / 3500);
         double mountains = 2600 * smooth(Math.min(far, 1)) * (0.55 + 0.45 * ridged(x * 0.00045, z * 0.00045, 5));
         // Relief: gentle near, larger away from the village
         double r = Math.sqrt(x * x + z * z);

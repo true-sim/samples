@@ -15,6 +15,13 @@ public final class ShowcaseSettings {
     public static final Setting<String> ASSETS = Setting.text("showcase.assets",
         System.getProperty("user.home") + "/.truesim/polyhaven",
         "the Poly Haven cache, mounted as ph:// (./gradlew :samples-showcase:fetchAssets fills it)");
+    /**
+     * effects-terrain's cache ({@code ./gradlew :samples-showcase:fetchTerrain} fills it): Lauterbrunnen's site; without
+     * it the village stands in a valley made from functions.
+     */
+    public static final Setting<String> TERRAIN = Setting.text("showcase.terrain",
+        System.getProperty("user.home") + "/.truesim/terrain",
+        "effects-terrain's cache with the Lauterbrunnen site (./gradlew :samples-showcase:fetchTerrain fills it)");
     /** The quality preset: low, medium, high or ultra (the atmosphere's, the clouds', the shadows', the GI's). */
     public static final Setting<String> QUALITY = Setting.text("showcase.quality", "high",
         "the quality preset: low, medium, high or ultra");
@@ -54,7 +61,7 @@ public final class ShowcaseSettings {
         "measure frame times per segment of the tour (GPU timestamps)");
 
     /** Every one of them. */
-    public static final List<Setting<?>> ALL = List.of(ASSETS, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS, EVERY,
+    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS, EVERY,
         PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
 
     private ShowcaseSettings() {

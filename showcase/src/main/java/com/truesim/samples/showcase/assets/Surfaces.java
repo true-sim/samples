@@ -22,7 +22,9 @@ public final class Surfaces {
     }
 
     public static final Scan COBBLES = new Scan("cobblestone_floor_03", "4k", 2.4, 0.42f, 0.4f, 0.37f, 1);
-    public static final Scan MEADOW = new Scan("leafy_grass", "4k", 2.0, 0.22f, 0.3f, 0.1f, 1);
+    public static final Scan MEADOW = new Scan("sparse_grass", "4k", 2.0, 0.2f, 0.24f, 0.1f, 1);
+    /** The meadow's tint: late October's grass, olive rather than the scan's brown. */
+    public static final float[] MEADOW_TINT = {0.82f, 1.15f, 1.0f};
     public static final Scan STONE_WALL = new Scan("old_stone_wall", "4k", 2.0, 0.42f, 0.38f, 0.33f, 1);
     public static final Scan PLASTER = new Scan("white_plaster_02", "4k", 3.0, 0.75f, 0.73f, 0.68f, 1);
     public static final Scan PLANKS = new Scan("weathered_planks", "4k", 2.0, 0.25f, 0.2f, 0.16f, 1);
@@ -37,6 +39,10 @@ public final class Surfaces {
     public static final Scan MOSSY_ROCK = new Scan("mossy_rock", "2k", 3.0, 0.35f, 0.36f, 0.3f, 1);
     public static final Scan FLOORBOARDS = new Scan("plank_flooring_02", "2k", 2.0, 0.45f, 0.3f, 0.18f, 0.7f);
     public static final Scan GRANITE = new Scan("granite_wall", "2k", 2.0, 0.5f, 0.47f, 0.43f, 1);
+    /** The terrain's layers: Lauterbrunnen's limestone cliffs, scree, the meadows, snow. */
+    public static final Scan LIMESTONE = new Scan("rock_boulder_dry", "2k", 6.0, 0.55f, 0.53f, 0.5f, 1);
+    public static final Scan SCREE = new Scan("gray_rocks", "2k", 3.0, 0.4f, 0.4f, 0.38f, 1);
+    public static final Scan SNOW = new Scan("snow_02", "2k", 4.0, 0.85f, 0.87f, 0.9f, 1);
 
     private final ShowcaseAssets assets;
 
@@ -68,6 +74,18 @@ public final class Surfaces {
             .texture("normalTexture", texture(base + "nor_gl" + suffix + "#linear"))
             .set("roughness", scan.roughness()).set("metallic", 1)
             .build().ref();
+    }
+
+    /** {@code scan} as a layer of effects-terrain's material (albedo, normal, the ORM's green for roughness). */
+    public com.truesim.effects.terrain.TerrainMaterial.Layer terrainLayer(Scan scan) {
+        if (!assets.polyHaven()) {
+            return new com.truesim.effects.terrain.TerrainMaterial.Layer(null, null, null, scan.size());
+        }
+        String base = ShowcaseAssets.MOUNT + "://" + scan.asset() + "/" + scan.asset() + "_";
+        String suffix = "_" + scan.resolution() + ".jpg";
+        return new com.truesim.effects.terrain.TerrainMaterial.Layer(texture(base + "diff" + suffix),
+            texture(base + "nor_gl" + suffix + "#linear"), texture(base + "arm" + suffix + "#linear"),
+            com.truesim.effects.terrain.TerrainMaterial.snap(scan.size()));
     }
 
     private AssetRef<TextureData> texture(String path) {

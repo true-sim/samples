@@ -86,6 +86,8 @@ public final class ShowcaseApp implements Application, PlatformListener {
         state.weatherRate = 1;
         state.fog = 0.0004;
         state.fires = true;
+        x += world.world.layout().originX();
+        z += world.world.layout().originZ();
         y = world.world.ground().height(x, z) + 1.8;
         System.out.println("""
             W A S D, Q E: fly (Shift: faster); right mouse button: look; a gamepad's sticks and shoulders too
@@ -98,6 +100,10 @@ public final class ShowcaseApp implements Application, PlatformListener {
     @Override
     public void update(Frame frame) {
         double dt = Math.min(frame.realDelta(), 0.1);
+        double seconds = engine.settings().get(ShowcaseSettings.SECONDS);
+        if (seconds > 0 && frame.realTime() > seconds) {
+            engine.quit();
+        }
         controls(dt);
         // the day follows: lamps on from dusk to dawn, rooms lit in the evening, fires burning when it is cold
         double h = state.hour;

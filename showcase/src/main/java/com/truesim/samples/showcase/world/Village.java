@@ -89,6 +89,7 @@ public final class Village implements AutoCloseable {
     private final ShowcaseAssets assets;
     private final World world;
     private final InterestSource camera;
+    private final com.truesim.effects.terrain.Terrain terrain; // or null: the valley made from functions
     private final GroundTiles tiles;
     private final VillageMeshes meshes;
     private final Map<String, AssetRef<ModelData>> models = new HashMap<>();
@@ -110,7 +111,8 @@ public final class Village implements AutoCloseable {
     private final List<Effect> fires = new ArrayList<>();
     private final List<Effect> smokes = new ArrayList<>();
 
-    public Village(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Surfaces surfaces) {
+    public Village(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Surfaces surfaces,
+        com.truesim.effects.terrain.data.TerrainSite site) {
         this.renderer = renderer;
         this.scene = renderer.scene();
         this.ground = ground;
@@ -119,7 +121,8 @@ public final class Village implements AutoCloseable {
         tiles = new GroundTiles(ground, Surfaces.MEADOW.size(), Surfaces.FOREST_FLOOR.size(),
             Surfaces.MOSSY_ROCK.size());
         meshes = new VillageMeshes(ground, layout);
-        groundMaterials = List.of(surfaces.scan(Surfaces.MEADOW), surfaces.scan(Surfaces.FOREST_FLOOR),
+        groundMaterials = List.of(surfaces.scan(Surfaces.MEADOW, Surfaces.MEADOW_TINT[0], Surfaces.MEADOW_TINT[1],
+            Surfaces.MEADOW_TINT[2]), surfaces.scan(Surfaces.FOREST_FLOOR),
             surfaces.scan(Surfaces.MOSSY_ROCK), Surfaces.plain(0.62f, 0.62f, 0.64f, 0.85f));
         AssetRef<MaterialData> stone = surfaces.scan(Surfaces.STONE_WALL);
         AssetRef<MaterialData> planks = surfaces.scan(Surfaces.PLANKS);
@@ -158,7 +161,24 @@ public final class Village implements AutoCloseable {
         }
         world = new World(scene, assets.tasks());
         world.setAttachBudget(24);
-        world.register(GROUND, new GroundLoader());
+        if (site != null) {
+            // effects-terrain's tiles: its own layer of the same world, its own interest following the camera
+            com.truesim.common.math.color.Color white = new com.truesim.common.math.color.Color(1, 1, 1, 1);
+            var rules = com.truesim.effects.terrain.material.TerrainParameters.DEFAULTS;
+            if (assets.polyHaven()) {
+                rules = rules.withRockColor(white).withGrassColor(new com.truesim.common.math.color.Color(
+                    Surfaces.MEADOW_TINT[0], Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
+                    .withSnowColor(white);
+            }
+            AssetRef<MaterialData> material = com.truesim.effects.terrain.TerrainMaterial.data(rules,
+                surfaces.terrainLayer(Surfaces.LIMESTONE), surfaces.terrainLayer(Surfaces.MEADOW),
+                surfaces.terrainLayer(Surfaces.SCREE), surfaces.terrainLayer(Surfaces.SNOW)).ref();
+            terrain = new com.truesim.effects.terrain.Terrain(world, assets.resources(), site, material,
+                renderer.settings());
+        } else {
+            terrain = null;
+            world.register(GROUND, new GroundLoader());
+        }
         world.register(BUILDINGS, new PickLoader(true));
         world.register(PROPS, new PickLoader(false));
         camera = world.addInterest(CAMERA, Priority.HIGH);
@@ -185,12 +205,18 @@ public final class Village implements AutoCloseable {
     public void update(double x, double y, double z, double fovY, double height) {
         camera.setView(fovY, height);
         camera.moveTo(x, y, z);
+        if (terrain != null) {
+            terrain.follow(x, y, z, fovY, height);
+        }
         world.update();
+        if (terrain != null) {
+            terrain.update();
+        }
     }
 
     /** Whether everything the camera asks for has loaded and attached. */
     public boolean ready() {
-        return world.isReady(camera);
+        return world.isReady(camera) && (terrain == null || terrain.pendingTiles() == 0);
     }
 
     public World world() {
@@ -285,7 +311,7 @@ public final class Village implements AutoCloseable {
                     }
                 }
             }
-            return new Picked(bs, ps, ls, fs, buildings && in(0, 0, x0, z0, s));
+            return new Picked(bs, ps, ls, fs, buildings && in(layout.originX(), layout.originZ(), x0, z0, s));
         }
 
         private boolean in(double x, double z, double x0, double z0, double s) {
@@ -308,8 +334,10 @@ public final class Village implements AutoCloseable {
             }
             if (data.origin()) { // the square and the road live in the origin's cell
                 long square = content.create();
-                scene.components().set(square, Renderable.TYPE, Renderable.of(meshes.mesh(
-                    new VillageMeshes.Square(VillageLayout.SQUARE_X, VillageLayout.SQUARE_Z)), List.of(cobbles, kerb)));
+                scene.setTranslation(square, layout.originX(), 0, layout.originZ());
+                scene.components().set(square, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Square(
+                    layout.originX(), layout.originZ(), VillageLayout.SQUARE_X, VillageLayout.SQUARE_Z)),
+                    List.of(cobbles, kerb)));
                 long road = content.create();
                 scene.components().set(road, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Road(4.5)),
                     List.of(gravel)));
@@ -370,7 +398,7 @@ public final class Village implements AutoCloseable {
         if (b.lit()) {
             long lamp = content.create(node);
             scene.setTranslation(lamp, f.ceilingLamp()[0], f.ceilingLamp()[1], f.ceilingLamp()[2]);
-            double candela = b.spec().kind() == Kind.CAFE ? 260 : b.spec().kind() == Kind.CHURCH ? 400 : 120;
+            double candela = b.spec().kind() == Kind.CAFE ? 450 : b.spec().kind() == Kind.CHURCH ? 500 : 260;
             scene.components().set(lamp, LightSource.TYPE, LightSource.point(1, 0.74f, 0.48f, 0)
                 .range(b.spec().kind() == Kind.CHURCH ? 20 : 11));
             rooms.add(new Light(lamp, candela));
@@ -389,7 +417,7 @@ public final class Village implements AutoCloseable {
             long l = content.create(node);
             scene.setTranslation(l, lantern[0], lantern[1], lantern[2]);
             scene.components().set(l, LightSource.TYPE, LightSource.point(1, 0.7f, 0.42f, 0).range(9));
-            lamps.add(new Light(l, 45));
+            lamps.add(new Light(l, 90));
             AssetRef<ModelData> model = models.get("Lantern_01");
             spawn(model, content, node, lantern[0], lantern[1] - 0.18, lantern[2], 0, 1.4);
             long glow = content.create(node);
@@ -422,7 +450,7 @@ public final class Village implements AutoCloseable {
         long light = content.create(node);
         scene.setTranslation(light, 0, 3.35, 0);
         scene.components().set(light, LightSource.TYPE, LightSource.point(1, 0.72f, 0.45f, 0).range(22));
-        lamps.add(new Light(light, 240));
+        lamps.add(new Light(light, 650));
         long bulb = content.create(node);
         scene.setTranslation(bulb, 0, 3.28, 0);
         scene.components().set(bulb, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Bulb(0.06, 0.14)),
@@ -479,6 +507,9 @@ public final class Village implements AutoCloseable {
 
     @Override
     public void close() {
+        if (terrain != null) {
+            terrain.close();
+        }
         camera.close();
         world.close();
         for (AssetRef<ModelData> ref : models.values()) {

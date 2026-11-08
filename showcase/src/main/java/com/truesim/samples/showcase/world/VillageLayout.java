@@ -46,8 +46,21 @@ public final class VillageLayout {
     private final List<Lamp> lamps = new ArrayList<>();
     private final List<Fence> fences = new ArrayList<>();
     private final List<double[]> road = new ArrayList<>();
+    private final double originX;
+    private final double originZ;
 
+    /** The plan about the origin, on flat ground (the tests). */
     public VillageLayout() {
+        this(0, 0, null);
+    }
+
+    /**
+     * The plan with its square at ({@code originX}, {@code originZ}) of the world; rocks and the stand-in trees kept
+     * off ground steeper than they would lie on ({@code ground}, null: all kept).
+     */
+    public VillageLayout(double originX, double originZ, Ground ground) {
+        this.originX = originX;
+        this.originZ = originZ;
         double q = Math.PI / 2;
         // The square's buildings
         building("cafe", new Spec(Kind.CAFE, 14, 9.5, 3.4, 2.9, 24, 11), 1, -SQUARE_Z - 5.3, 0, true, true);
@@ -165,7 +178,9 @@ public final class VillageLayout {
                 default -> "tree_stump_01";
             };
             double scale = model.startsWith("rock_moss") ? rocks.nextDouble(0.3, 0.7) : rocks.nextDouble(0.8, 2.2);
-            props.add(new Prop(model, x, -0.15 * scale, z, rocks.nextDouble(0, 2 * Math.PI), scale, null));
+            if (gentle(ground, x, z, 30)) {
+                props.add(new Prop(model, x, -0.15 * scale, z, rocks.nextDouble(0, 2 * Math.PI), scale, null));
+            }
         }
         // stand-in trees on the slopes until common-procedural's forest lands: Poly Haven's saplings, scaled up
         SplittableRandom trees = new SplittableRandom(23);
@@ -174,8 +189,40 @@ public final class VillageLayout {
             double x = side * trees.nextDouble(120, 330);
             double z = trees.nextDouble(-320, 320);
             String model = trees.nextBoolean() ? "fir_sapling" : "pine_sapling_small";
-            props.add(new Prop(model, x, -0.3, z, trees.nextDouble(0, 2 * Math.PI), trees.nextDouble(6, 11), "tree"));
+            if (gentle(ground, x, z, 38)) {
+                props.add(new Prop(model, x, -0.3, z, trees.nextDouble(0, 2 * Math.PI), trees.nextDouble(6, 11),
+                    "tree"));
+            }
         }
+        // everything on the ground plan moved to the square's place in the world
+        if (originX != 0 || originZ != 0) {
+            buildings.replaceAll(b -> new Building(b.name(), b.spec(), b.x() + originX, b.z() + originZ, b.yaw(),
+                b.lit(), b.fire()));
+            props.replaceAll(p -> p.inside() != null && !"tree".equals(p.inside()) ? p : new Prop(p.model(),
+                p.x() + originX, p.y(), p.z() + originZ, p.yaw(), p.scale(), p.inside()));
+            lamps.replaceAll(l -> new Lamp(l.x() + originX, l.z() + originZ, l.yaw()));
+            fences.replaceAll(f -> new Fence(f.x0() + originX, f.z0() + originZ, f.x1() + originX, f.z1() + originZ));
+            road.replaceAll(p -> new double[] {p[0] + originX, p[1] + originZ});
+        }
+    }
+
+    /** Whether the ground at the plan's ({@code x}, {@code z}) is no steeper than {@code degrees}. */
+    private boolean gentle(Ground ground, double x, double z, double degrees) {
+        if (ground == null) {
+            return true;
+        }
+        double[] n = new double[3];
+        ground.normal(x + originX, z + originZ, n);
+        return n[1] >= Math.cos(Math.toRadians(degrees));
+    }
+
+    /** Where the square lies in the world. */
+    public double originX() {
+        return originX;
+    }
+
+    public double originZ() {
+        return originZ;
     }
 
     private static Spec chalet(double width, double depth, long seed) {

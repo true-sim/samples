@@ -146,6 +146,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private double weatherTime;
     private final double[] below = new double[3];
     private final double[] clear = new double[3];
+    private final double[] sunLight = new double[3];
+    private final double[] sunDirection = new double[3];
+    private double direct = 1;
 
     /**
      * The device-wide parts on {@code device}, drawing into {@code graph} (whose settings it reads and presets), its
@@ -159,12 +162,15 @@ public final class ShowcaseRenderer implements AutoCloseable {
         FrameSlots slots = graph.frameSlots();
         quality = quality(settings.get(ShowcaseSettings.QUALITY));
         presets(settings, quality);
+        // global illumination: the probe volume (the default) or radiance cascades, or none
+        settings.set(EngineSettings.Layer.GAME, ProbeVolumeLighting.SLOT.setting(), settings.get(ShowcaseSettings.GI));
         rays = device.rayTracing() ? own(new RayTracing(device, assets.resources().pool(), 1 << 16)) : null;
         if (rays != null) {
             assets.rayTracing(rays);
         }
         gpu = own(new GpuScene(device, assets.resources().pool(), 1 << 16, slots));
         gpu.setMaterials(assets.resources().materials());
+        assets.resources().materials().register(com.truesim.effects.terrain.material.TerrainType.TYPE);
         renderer = own(new MeshletRenderer(device, gpu, COLOR, DEPTH, slots));
         geometry = SceneGeometry.meshlets(renderer);
         lights = own(new Lights(device, 512, 32, slots));
@@ -182,9 +188,10 @@ public final class ShowcaseRenderer implements AutoCloseable {
         skyNode = scene.create();
         sky = own(new AtmosphereSync(scene, skyNode, assets.cache(), assets.paths(), atmosphere));
         regions = new FogRegions(scene);
-        weather = new Weather(WeatherConfig.forQuality(quality), WeatherDomain.flat(), WeatherPreset.FAIR);
+        Quality clouds = clouds(quality);
+        weather = new Weather(WeatherConfig.forQuality(clouds), WeatherDomain.flat(), WeatherPreset.FAIR);
         weatherGpu = own(new WeatherGpu(device, slots, assets.resources().textures(), weather, CloudTypes.physical(),
-            CloudsConfig.forQuality(quality), settings));
+            CloudsConfig.forQuality(clouds), settings));
         cloudLighting = new AtmosphereLighting(atmosphere);
         bolts = own(new LightningBolts(device, slots, weatherGpu, 3, 400));
         flashes = new LightningLights(scene, com.truesim.scene.core.NodeHandle.NONE, 4, 30_000);
@@ -201,6 +208,14 @@ public final class ShowcaseRenderer implements AutoCloseable {
         weather.refreshAll();
     }
 
+    /**
+     * The clouds' tier for a preset: from high up the ray-marched fly-through clouds (effects-weather's ULTRA), which
+     * the camera passes under and beside in the tour; the layered tier at HIGH streaked at the low sun's grazing angles.
+     */
+    static Quality clouds(Quality quality) {
+        return quality == Quality.HIGH ? Quality.ULTRA : quality;
+    }
+
     /** The preset named ({@code low}, {@code medium}, {@code high}, {@code ultra}). */
     public static Quality quality(String name) {
         return Quality.valueOf(name.trim().toUpperCase(Locale.ROOT));
@@ -213,16 +228,28 @@ public final class ShowcaseRenderer implements AutoCloseable {
      */
     public static void presets(EngineSettings settings, Quality quality) {
         AtmosphereQuality.apply(settings, quality);
-        CloudSettings.forQuality(settings, quality);
+        CloudSettings.forQuality(settings, clouds(quality));
         EngineSettings.Layer game = EngineSettings.Layer.GAME;
         settings.set(game, com.truesim.engine.render.DisplayTransform.CURVE, "agx");
         settings.set(game, AutoExposure.SLOT.setting(), "histogram");
+        // Krawczyk's key brightens a sunny noon towards 0.7 of white: a stop and a half down keeps the snow's and the
+        // plaster's texture and the sky's blue under AgX's shoulder
+        settings.set(game, AutoExposure.HISTOGRAM.setting("compensation"), -1.5f);
+        settings.set(game, com.truesim.engine.render.DisplayTransform.AGX.setting("look"),
+            com.truesim.engine.render.DisplayTransform.Look.PUNCHY);
         settings.set(game, LensEffects.VIGNETTE.setting(), "natural");
         settings.set(game, FilmGrain.SLOT.setting(), "film");
         settings.set(game, FilmGrain.FILM.setting("intensity"), 0.035f);
         settings.set(game, DepthOfField.SLOT.setting(), "gather");
         settings.set(game, DepthOfField.AUTOFOCUS, true);
         settings.set(game, DepthOfField.F_STOP, 11f);
+        // snow: a wider occlusion map (no snow under the eaves and roofs within 160 m), and the day's snow filling
+        // in over half a minute (the tour's dusk is a time-lapse)
+        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.AREA, 160f);
+        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.MAP_RESOLUTION, 2048);
+        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.FILL_SECONDS, 30f);
+        // effects-terrain: the snow map's bias a texel's rise on steep ground; the terrain's interest moving in steps
+        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.BIAS, 0.5f);
     }
 
     /**
@@ -299,6 +326,16 @@ public final class ShowcaseRenderer implements AutoCloseable {
         cloudLighting.sky(clear);
         double ratio = (below[0] + below[1] + below[2]) / Math.max(clear[0] + clear[1] + clear[2], 1e-30);
         environment.intensity((float) Math.clamp(ratio, 0.02, 1.5));
+        // under a closed cloud deck the sun gives no direct light: its share follows the sky under the clouds (the
+        // cloud shadow mask darkens the ground under single clouds; this, the light the deck lets through at all)
+        direct = Math.clamp((ratio - 0.3) / 0.5, 0, 1);
+        if (direct < 1) {
+            atmosphere.lightAtCamera(0, sunLight);
+            atmosphere.sunDirection(sunDirection);
+            double k = direct * direct;
+            lights.directional(sun, (float) -sunDirection[0], (float) -sunDirection[1], (float) -sunDirection[2],
+                (float) (sunLight[0] * k), (float) (sunLight[1] * k), (float) (sunLight[2] * k));
+        }
         scene.update();
         regions.update();
         for (int i = 0; i < snows.size(); i++) {
@@ -311,6 +348,11 @@ public final class ShowcaseRenderer implements AutoCloseable {
         lightSync.update();
         sync.update();
         overrides.update();
+    }
+
+    /** The share of the sun's direct light the clouds let through, 0 to 1. */
+    public double direct() {
+        return direct;
     }
 
     /** Whether the probe volume or radiance cascades light the scene (the device has ray tracing). */

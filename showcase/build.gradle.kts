@@ -11,6 +11,7 @@ val effectsParticlesVersion = rootProject.extra["effectsParticlesVersion"] as St
 val effectsAtmosphereVersion = rootProject.extra["effectsAtmosphereVersion"] as String
 val effectsWeatherVersion = rootProject.extra["effectsWeatherVersion"] as String
 val effectsPostVersion = rootProject.extra["effectsPostVersion"] as String
+val effectsTerrainVersion = rootProject.extra["effectsTerrainVersion"] as String
 
 dependencies {
     implementation("com.truesim.engine:engine-scene:$engineVersion")
@@ -20,6 +21,8 @@ dependencies {
     implementation("com.truesim.scene:scene-gltf:$sceneVersion")
     implementation("com.truesim.scene:scene-world:$sceneVersion")
     implementation("com.truesim.effects:effects-particles:$effectsParticlesVersion")
+    implementation("com.truesim.effects:effects-particles-fireworks:$effectsParticlesVersion") // the night's show
+    implementation("com.truesim.effects:effects-terrain:$effectsTerrainVersion") // Lauterbrunnen's real terrain
     implementation("com.truesim.effects:atmosphere-render:$effectsAtmosphereVersion")
     implementation("com.truesim.effects:weather-render:$effectsWeatherVersion")
     implementation("com.truesim.effects:weather-snow:$effectsWeatherVersion")
@@ -88,6 +91,39 @@ tasks.register<JavaExec>("tour") {
     mainClass = "com.truesim.samples.showcase.ShowcaseTour"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
-        "measure", "assets")
+        "measure", "assets", "terrain")
     argumentProviders.add(CommandLineArgumentProvider { settings })
+}
+
+// The interactive app (ShowcaseApp): ./gradlew :samples-showcase:run [-Phour=7] [-Pweather=fair] [-Pquality=ultra]
+// [-Pgi=cascades] [-Pseconds=n]
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
+    val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain")
+    argumentProviders.add(CommandLineArgumentProvider { settings })
+}
+
+// Development: a shaded relief map of the terrain site round the origin (TerrainMap), heights at points.
+// ./gradlew :samples-showcase:terrainMap -Phalf=3000 -Pout=<png> -Ppoints="x,z x,z"
+tasks.register<JavaExec>("terrainMap") {
+    group = "showcase"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "com.truesim.samples.showcase.world.TerrainMap"
+    val cache = providers.gradleProperty("terrainCache").orNull ?: "${System.getProperty("user.home")}/.truesim/terrain"
+    args(listOf(cache, "lauterbrunnen", providers.gradleProperty("half").orNull ?: "3000",
+        providers.gradleProperty("out").orNull ?: "terrain.png") +
+        (providers.gradleProperty("points").orNull?.split(" ")?.filter { it.isNotBlank() } ?: listOf()))
+}
+
+// Lauterbrunnen's elevation data (effects-terrain's pinned manifest: swissALTI3D, Copernicus GLO-30 and GLO-90),
+// fetched and imported into effects-terrain's cache (~/.truesim/terrain, -PterrainCache=<dir>), never committed; the
+// showcase reads it from there (the setting showcase.terrain). Without it the village stands in a made-up valley.
+tasks.register<JavaExec>("fetchTerrain") {
+    group = "showcase"
+    description = "Fetches and imports the Lauterbrunnen terrain site into effects-terrain's cache."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "com.truesim.effects.terrain.data.FetchTerrain"
+    args("lauterbrunnen", providers.gradleProperty("terrainCache").orNull
+        ?: "${System.getProperty("user.home")}/.truesim/terrain")
 }

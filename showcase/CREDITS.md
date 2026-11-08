@@ -8,7 +8,7 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 | Asset | Name | Authors | Kind | Resolution |
 |---|---|---|---|---|
 | [cobblestone_floor_03](https://polyhaven.com/a/cobblestone_floor_03) | Cobblestone Floor 03 | Rob Tuytel | texture | 4k |
-| [leafy_grass](https://polyhaven.com/a/leafy_grass) | Leafy Grass | Charlotte Baglioni | texture | 4k |
+| [sparse_grass](https://polyhaven.com/a/sparse_grass) | Sparse Grass | Amal Kumar | texture | 4k |
 | [old_stone_wall](https://polyhaven.com/a/old_stone_wall) | Old Stone Wall | Charlotte Baglioni | texture | 4k |
 | [white_plaster_02](https://polyhaven.com/a/white_plaster_02) | White Plaster 02 | Rob Tuytel | texture | 4k |
 | [weathered_planks](https://polyhaven.com/a/weathered_planks) | Weathered Planks | Dario Barresi, Dimitrios Savva | texture | 4k |
@@ -21,6 +21,9 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 | [rocky_trail](https://polyhaven.com/a/rocky_trail) | Rocky Trail | Amal Kumar | texture | 2k |
 | [forrest_ground_01](https://polyhaven.com/a/forrest_ground_01) | Forest Ground 01 | Rob Tuytel | texture | 2k |
 | [mossy_rock](https://polyhaven.com/a/mossy_rock) | Mossy Rock | Rob Tuytel | texture | 2k |
+| [rock_boulder_dry](https://polyhaven.com/a/rock_boulder_dry) | Rock Boulder Dry | Dimitrios Savva, Rico Cilliers | texture | 2k |
+| [gray_rocks](https://polyhaven.com/a/gray_rocks) | Gray Rocks | Dimitrios Savva | texture | 2k |
+| [snow_02](https://polyhaven.com/a/snow_02) | Snow 02 | Rob Tuytel | texture | 2k |
 | [plank_flooring_02](https://polyhaven.com/a/plank_flooring_02) | Plank Flooring 02 | Dario Barresi, Dimitrios Savva | texture | 2k |
 | [granite_wall](https://polyhaven.com/a/granite_wall) | Granite Wall | Dimitrios Savva | texture | 2k |
 | [street_lamp_01](https://polyhaven.com/a/street_lamp_01) | Street Lamp 01 | Josh Dean | model | 2k |
@@ -48,5 +51,17 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 | [Chandelier_01](https://polyhaven.com/a/Chandelier_01) | Chandelier 01 | Kirill Sannikov | model | 2k |
 | [wooden_display_shelves_01](https://polyhaven.com/a/wooden_display_shelves_01) | Wooden Display Shelves 01 | James Ray Cock | model | 2k |
 
-The licence: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) (Poly Haven's
+## Terrain
+
+Lauterbrunnen's terrain is effects-terrain's site, fetched by `./gradlew :samples-showcase:fetchTerrain` from its
+pinned manifest into a local cache, never committed; the data keeps its own licences:
+
+- swissALTI3D (2 m): free geodata (OGD) of the Federal Office of Topography swisstopo.
+- Copernicus DEM GLO-30 and GLO-90: produced using Copernicus WorldDEM-30 and WorldDEM-90 © DLR e.V. 2010-2014 and
+  © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights
+  reserved (the GLO-30/90 Public licence).
+
+## Licence
+
+The Poly Haven content: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) (Poly Haven's
 [licence page](https://polyhaven.com/license)). The showcase's code is MIT, as the rest of this repository.

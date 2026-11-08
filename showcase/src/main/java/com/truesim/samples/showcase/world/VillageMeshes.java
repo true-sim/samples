@@ -15,8 +15,11 @@ import java.util.List;
  */
 public final class VillageMeshes {
 
-    /** The square: cobbles over the ground, kerb stones round its edge. Submeshes: cobbles, kerbs. */
-    public record Square(double halfX, double halfZ) {
+    /**
+     * The square about ({@code cx}, {@code cz}) of the world (its node there): cobbles over the ground, kerb stones
+     * round its edge. Submeshes: cobbles, kerbs.
+     */
+    public record Square(double cx, double cz, double halfX, double halfZ) {
     }
 
     /** The road: a strip {@code width} wide along the layout's centre line. */
@@ -63,10 +66,10 @@ public final class VillageMeshes {
             for (double z = -s.halfZ(); z < s.halfZ() - 1e-6; z += step) {
                 double x1 = Math.min(x + step, s.halfX());
                 double z1 = Math.min(z + step, s.halfZ());
-                double[] a = p(x, ground.height(x, z) + lift, z);
-                double[] b = p(x1, ground.height(x1, z) + lift, z);
-                double[] c = p(x1, ground.height(x1, z1) + lift, z1);
-                double[] d = p(x, ground.height(x, z1) + lift, z1);
+                double[] a = p(x, ground.height(s.cx() + x, s.cz() + z) + lift, z);
+                double[] b = p(x1, ground.height(s.cx() + x1, s.cz() + z) + lift, z);
+                double[] c = p(x1, ground.height(s.cx() + x1, s.cz() + z1) + lift, z1);
+                double[] d = p(x, ground.height(s.cx() + x, s.cz() + z1) + lift, z1);
                 kit.to(0).groundQuad(a, b, c, d, 2.4);
             }
         }
@@ -74,14 +77,14 @@ public final class VillageMeshes {
         kit.to(1);
         for (double x = -s.halfX(); x < s.halfX() - 1e-6; x += 1.0) {
             for (double z : new double[] {-s.halfZ(), s.halfZ() - 0.3}) {
-                double h = ground.height(x + 0.5, z) + lift;
+                double h = ground.height(s.cx() + x + 0.5, s.cz() + z) + lift;
                 kit.box(p(x + 0.01, h - 0.4, z), p(x + 0.99, h + 0.14, z + 0.3), 1, false);
             }
         }
         for (double z = -s.halfZ() + 0.3; z < s.halfZ() - 0.3 - 1e-6; z += 1.0) {
             double z1 = Math.min(z + 0.98, s.halfZ() - 0.3);
             for (double x : new double[] {-s.halfX(), s.halfX() - 0.3}) {
-                double h = ground.height(x, z + 0.5) + lift;
+                double h = ground.height(s.cx() + x, s.cz() + z + 0.5) + lift;
                 kit.box(p(x, h - 0.4, z + 0.01), p(x + 0.3, h + 0.14, z1), 1, false);
             }
         }

@@ -12,7 +12,10 @@ import com.truesim.samples.showcase.day.DayState;
 import com.truesim.samples.showcase.fx.FxTextures;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
+import com.truesim.samples.showcase.world.TerrainGround;
 import com.truesim.samples.showcase.world.ValleyGround;
+import com.truesim.effects.terrain.data.TerrainAssets;
+import com.truesim.effects.terrain.data.TerrainSite;
 import com.truesim.samples.showcase.world.Village;
 import com.truesim.samples.showcase.world.VillageLayout;
 import com.truesim.scene.assets.AssetRef;
@@ -40,20 +43,27 @@ public final class ShowcaseWorld implements AutoCloseable {
     private final VillageLayout layout;
     private final Village village;
     private final DayDriver day;
+    private final TerrainSite site;
+
+    /** Where the square lies in Lauterbrunnen's frame (x east, z south of the church), metres. */
+    public static final double VILLAGE_X = -130;
+    public static final double VILLAGE_Z = 300;
 
     public ShowcaseWorld(VulkanDevice device, FrameGraph graph, ShowcaseAssets assets) throws InterruptedException {
-        ground = new ValleyGround();
+        site = assets.terrain() ? site(assets) : null;
+        ground = site != null ? new TerrainGround(site, graph.settings()) : new ValleyGround();
         renderer = new ShowcaseRenderer(device, graph, assets, ground);
-        layout = new VillageLayout();
+        // in Lauterbrunnen the square lies on the meadow west of the Lütschine, below the Staubbach falls
+        layout = site != null ? new VillageLayout(VILLAGE_X, VILLAGE_Z, ground) : new VillageLayout(0, 0, ground);
         Surfaces surfaces = new Surfaces(assets);
-        village = new Village(renderer, ground, layout, surfaces);
+        village = new Village(renderer, ground, layout, surfaces, site);
         // the particles' textures, held and loaded before the first fire
         for (AssetRef<TextureData> ref : List.of(FxTextures.FLAME, FxTextures.GLOW, FxTextures.EMBER, FxTextures.SMOKE,
             FxTextures.SMOKE_NORMALS)) {
             assets.resources().hold(ref);
         }
         village.awaitModels(Duration.ofMinutes(3));
-        day = new DayDriver(renderer, village, ground);
+        day = new DayDriver(renderer, village, ground, layout, site != null);
     }
 
     /** The whole chain in {@code port}, seeing what {@code camera} sees. */
@@ -79,6 +89,33 @@ public final class ShowcaseWorld implements AutoCloseable {
 
     public ShowcaseRenderer renderer() {
         return renderer;
+    }
+
+    /** The terrain's site, or null (the valley made from functions). */
+    public TerrainSite site() {
+        return site;
+    }
+
+    public VillageLayout layout() {
+        return layout;
+    }
+
+    /** The Lauterbrunnen site through the asset manager, waited for. */
+    private static TerrainSite site(ShowcaseAssets assets) throws InterruptedException {
+        AssetRef<TerrainSite> ref = TerrainAssets.site(assets.paths(), "lauterbrunnen");
+        assets.cache().acquire(ref); // held while the world is
+        long deadline = System.nanoTime() + 120_000_000_000L;
+        while (assets.cache().get(ref) == null) {
+            if (assets.cache().failure(ref) != null || System.nanoTime() > deadline) {
+                System.err.println("Could not load the terrain site: " + assets.cache().failure(ref));
+                return null;
+            }
+            assets.drain();
+            Thread.sleep(5);
+        }
+        System.out.println("Terrain: " + assets.cache().get(ref).title() + "; " + String.join("; ",
+            assets.cache().get(ref).attributions()));
+        return assets.cache().get(ref);
     }
 
     public Ground ground() {

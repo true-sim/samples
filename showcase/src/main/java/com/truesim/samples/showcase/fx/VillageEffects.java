@@ -20,12 +20,12 @@ import com.truesim.scene.effects.Spawn;
 
 /**
  * The village's particle effects (effects-particles, as scene-effects' data): fire in the hearths, smoke from the
- * chimneys, snowfall and rain about the camera, and the fireworks over the square (a stand-in built from the samples
- * demo's launches until effects-particles' fireworks API lands).
+ * chimneys, snowfall and rain about the camera (the night's fireworks are effects-particles-fireworks' show:
+ * {@code DayDriver}).
  *
  * <p>Light in the atmosphere's scene units: the scene's colour is luminance times 1 / (1.2 * 2^EV100), and the EV100
  * follows the day from noon to night, so what glows (flames, embers, fireworks) takes its colour from a parameter
- * set every frame to its luminance in those units ({@link #FLAME}, {@link #EMBER}, {@link #GLOW}, {@link #SPARK}:
+ * set every frame to its luminance in those units ({@link #FLAME}, {@link #EMBER}, {@link #GLOW}:
  * colour times cd/m² times the units). Lit particles (smoke, flakes, rain) take the lights' light, already in them.
  */
 public final class VillageEffects {
@@ -36,8 +36,6 @@ public final class VillageEffects {
     public static final EffectParameter.Color EMBER = EffectParameter.ofColor("ember");
     /** A fire's flickering light's colour (times the light's intensity). */
     public static final EffectParameter.Color GLOW = EffectParameter.ofColor("glow");
-    /** Fireworks' stars. */
-    public static final EffectParameter.Color SPARK = EffectParameter.ofColor("spark");
     /** Snowflakes or raindrops a second, of the effect's most. */
     public static final EffectParameter.Float RATE = EffectParameter.ofFloat("rate");
 
@@ -47,8 +45,6 @@ public final class VillageEffects {
     public static final double EMBER_LUMINANCE = 6000;
     /** A fire's light per unit of its glow's colour: candela at full flicker. */
     public static final double GLOW_CANDELA = 180;
-    /** Fireworks' stars. */
-    public static final double SPARK_LUMINANCE = 30000;
 
     /** Fires and smoke far away: fewer particles drawn and spawned. */
     static final EffectType FIRES = EffectType.builder("fires").lod(25, 0.6f, 1, 0.5f).lod(60, 0.3f, 2, 0.25f)
@@ -67,8 +63,6 @@ public final class VillageEffects {
     public static final EffectData SNOW = snow();
     /** Rain in a box about the camera: streaks along their fall, lit per vertex. */
     public static final EffectData RAIN = rain();
-    /** One launch of the fireworks show. */
-    public static final EffectData LAUNCH = launch();
 
     private VillageEffects() {
     }
@@ -145,7 +139,7 @@ public final class VillageEffects {
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(70, 4, 70), Init.velocity(Bind.random(-0.2f, 0.2f), Bind.random(-1.2f, -0.8f),
                     Bind.random(-0.2f, 0.2f)), Init.lifetime(Bind.random(16, 20)),
-                    Init.size(Bind.random(0.012f, 0.03f)), Init.color(Bind.color(0.9f, 0.9f, 0.95f, 0.95f)))
+                    Init.size(Bind.random(0.025f, 0.05f)), Init.color(Bind.color(0.9f, 0.9f, 0.95f, 0.95f)))
                 .update(Forces.gravity(Bind.constant(0.1f)), Forces.drag(0.9f), Forces.wind(0.7f),
                     Forces.curl(Bind.constant(0.5f), 0.3f, 0.4f, 2),
                     Module.of("showcase.flutter").with("radius", Bind.constant(0.1f)).with("rate",
@@ -165,58 +159,12 @@ public final class VillageEffects {
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(50, 3, 50), Init.velocity(Bind.random(-0.4f, 0.4f), Bind.random(-9.5f, -8),
                     Bind.random(-0.4f, 0.4f)), Init.lifetime(Bind.random(2.6f, 3)),
-                    Init.size(Bind.random(0.008f, 0.012f)), Init.color(Bind.color(0.7f, 0.75f, 0.8f, 0.35f)))
+                    Init.size(Bind.random(0.006f, 0.01f)), Init.color(Bind.color(0.75f, 0.8f, 0.85f, 0.45f)))
                 .update(Forces.wind(0.5f))
                 .collide(Collide.rays().orElse(Collide.height()).kill())
                 .render(Renderer.billboard(Renderer.Facing.VELOCITY).lighting(Renderer.Lighting.PER_VERTEX)
-                    .set("stretch", 0.06f).set("soft", 0.05f).asset("texture", FxTextures.EMBER)))
+                    .set("stretch", 0.12f).set("soft", 0.05f).asset("texture", FxTextures.EMBER)))
             .build(ShowcaseParticleModules.MODULES.registry());
     }
 
-    private static EffectData launch() {
-        return EffectData.builder().parameter(SPARK, 1, 1, 1, 1)
-            .emitter("rockets", e -> e.duration(0.5).spawn(Spawn.burst(0, Bind.random(1, 2.99f)))
-                .init(Shape.disc(0.4f), Init.velocity(Bind.random(-3, 3), Bind.random(36, 42), Bind.random(-3, 3)),
-                    Init.lifetime(Bind.random(2.3f, 2.8f)), Init.size(Bind.constant(0.3f)),
-                    Init.color(Bind.param(SPARK)))
-                .update(Forces.gravity(), Forces.drag(0.12f), Over.color(ColorGradient.builder()
-                    .linear(0, 0.5f, 0.3f, 0.1f, 1).linear(1, 0.5f, 0.3f, 0.1f, 1).build()))
-                .event(ParticleEvent.onDeath("stars", Bind.random(120, 180)), ParticleEvent.onDeath("flash",
-                    Bind.constant(1)), ParticleEvent.emit("trail", Bind.constant(45)))
-                .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive().set("stretch", 0.06f)
-                    .asset("texture", FxTextures.EMBER)))
-            .emitter("trail", e -> e.capacity(900).spawn(Spawn.fromEvents()).init(Shape.sphere(0.05f),
-                    Init.speed(Bind.random(0.2f, 0.8f)), Init.lifetime(Bind.random(0.5f, 1.1f)),
-                    Init.size(Bind.random(0.08f, 0.14f)), Init.color(Bind.param(SPARK)), Init.inherit(0.15f))
-                .update(Forces.gravity(Bind.constant(0.5f)), Forces.drag(1.5f),
-                    Over.color(ColorGradient.builder().linear(0, 0.3f, 0.2f, 0.1f, 1).linear(1, 0.06f, 0.02f, 0.005f,
-                        0).build()))
-                .render(Renderer.billboard(Renderer.Facing.POSITION).additive().asset("texture", FxTextures.EMBER)))
-            .emitter("stars", e -> e.capacity(2400).spawn(Spawn.fromEvents())
-                .init(Shape.sphere(0.2f, 0), Init.speed(Bind.random(18, 24)), Init.lifetime(Bind.random(1.6f, 2.4f)),
-                    Init.size(Bind.random(0.35f, 0.5f)), Init.color(Bind.random(ColorGradient.builder()
-                        .linear(0, 1, 0.2f, 0.08f, 1).linear(0.25f, 1, 0.65f, 0.15f, 1).linear(0.5f, 0.15f, 0.9f,
-                            0.25f, 1).linear(0.75f, 0.2f, 0.35f, 1, 1).linear(1, 1, 0.2f, 0.85f, 1).build())))
-                .update(Forces.gravity(Bind.constant(0.3f)), Forces.drag(2.2f),
-                    Over.color(ColorGradient.builder().linear(0, 1.8f, 1.8f, 1.8f, 1).linear(0.12f, 1, 1, 1, 1)
-                        .linear(0.55f, 0.8f, 0.65f, 0.5f, 1).linear(1, 0.3f, 0.15f, 0.08f, 0).build()))
-                .event(ParticleEvent.onDeath("sparkles", Bind.constant(3)).chance(0.35f))
-                .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive().set("stretch", 0.05f)
-                    .asset("texture", FxTextures.EMBER), Renderer.trail(8).additive().set("width.head", 0.5f)
-                    .set("width.tail", 0f)))
-            .emitter("sparkles", e -> e.capacity(3000).spawn(Spawn.fromEvents()).init(Shape.sphere(0.1f),
-                    Init.speed(Bind.random(1, 2.5f)), Init.lifetime(Bind.random(0.25f, 0.6f)),
-                    Init.size(Bind.random(0.1f, 0.16f)), Init.color(Bind.param(SPARK)))
-                .update(Forces.gravity(Bind.constant(0.3f)), Forces.drag(1),
-                    Over.color(ColorGradient.builder().linear(0, 0.6f, 0.55f, 0.4f, 1).linear(0.4f, 0.2f, 0.2f,
-                        0.2f, 1).linear(0.55f, 0.6f, 0.6f, 0.6f, 1).linear(1, 0.25f, 0.2f, 0.1f, 0).build()))
-                .render(Renderer.billboard(Renderer.Facing.POSITION).additive().asset("texture", FxTextures.EMBER)))
-            .emitter("flash", e -> e.capacity(4).spawn(Spawn.fromEvents()).init(Shape.point(), Init.lifetime(0.7f),
-                    Init.size(Bind.constant(14)), Init.color(Bind.param(SPARK)), Init.inherit(0, true, false))
-                .update(Over.color(ColorGradient.builder().linear(0, 0.2f, 0.2f, 0.2f, 0.25f).linear(0.2f, 0.1f,
-                    0.1f, 0.1f, 0.2f).linear(1, 0, 0, 0, 0).build()))
-                .render(Renderer.billboard(Renderer.Facing.POSITION).additive().asset("texture", FxTextures.GLOW),
-                    Renderer.light(160, 0.15f).set("max", 2)))
-            .build(ShowcaseParticleModules.MODULES.registry());
-    }
 }

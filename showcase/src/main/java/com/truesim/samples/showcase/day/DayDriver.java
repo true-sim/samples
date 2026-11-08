@@ -22,6 +22,11 @@ import com.truesim.samples.showcase.fx.VillageEffects;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
 import com.truesim.samples.showcase.world.Village;
+import com.truesim.samples.showcase.world.VillageLayout;
+import com.truesim.effects.particles.fireworks.FireworkDisplay;
+import com.truesim.effects.particles.fireworks.FireworkShow;
+import com.truesim.effects.particles.fireworks.FireworksSettings;
+import com.truesim.effects.particles.fireworks.FireworksSync;
 import com.truesim.scene.core.LightSource;
 import com.truesim.scene.core.SceneGraph;
 import com.truesim.scene.core.ShadowSpec;
@@ -29,11 +34,10 @@ import com.truesim.scene.effects.Effect;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.SplittableRandom;
 
 /**
  * Makes the world follow a {@link DayState} every frame: the sky's clock (the sun, the moon and the stars from the
- * ephemeris for Heiligenblut am Großglockner, 47.04° N 12.84° E, 1,290 m, on 24 October 2026), the weather's preset and
+ * ephemeris for Lauterbrunnen, 46.59° N 7.91° E, on 24 October 2026), the weather's preset and
  * pace, the height fog and the valley's mist (fog volumes), the snow's cover and fall (the snow hook and the flakes),
  * rain, the lamps, the rooms' lights, the hearths and the fireworks, the camera's depth of field, and the exposure.
  *
@@ -46,8 +50,12 @@ import java.util.SplittableRandom;
  */
 public final class DayDriver {
 
-    /** Where: Heiligenblut am Großglockner. */
-    public static final Observer PLACE = new Observer(47.04, 12.84, 1290);
+    /**
+     * Where: Lauterbrunnen's church, the terrain's origin. The world's y is the altitude above the sea (effects-terrain's
+     * frame), so the atmosphere's origin is at sea level; the valley made from functions lies at y 0, 800 m up.
+     */
+    public static final double LATITUDE = 46.5937;
+    public static final double LONGITUDE = 7.9087;
     /** When: local midnight (CEST, UTC+2) starting 24 October 2026. */
     public static final Instant MIDNIGHT = Instant.parse("2026-10-23T22:00:00Z");
     /** A street lamp's glass and a bulb, cd/m² at full brightness. */
@@ -62,19 +70,21 @@ public final class DayDriver {
     private final Atmosphere atmosphere;
     private final List<long[]> mist = new ArrayList<>();
     private final long weatherFx;
+    private final VillageLayout layout;
+    private final FireworksSync fireworks;
+    private final long show;
+    private boolean showing;
     private final Effect snow;
     private final Effect rain;
-    private final SplittableRandom launches = new SplittableRandom(99);
     private final double[] scratch = new double[3];
     private final double[] colour = new double[4];
     private WeatherPreset weather;
     private boolean stormSpawned;
     private double ev = 12;
-    private double nextLaunch;
     private double time;
     private boolean first = true;
 
-    public DayDriver(ShowcaseRenderer renderer, Village village, Ground ground) {
+    public DayDriver(ShowcaseRenderer renderer, Village village, Ground ground, VillageLayout layout, boolean real) {
         this.renderer = renderer;
         this.village = village;
         this.ground = ground;
@@ -82,19 +92,27 @@ public final class DayDriver {
         settings = renderer.settings();
         atmosphere = renderer.atmosphere();
         scene.components().set(renderer.skyNode(), SkyComponents.SKY,
-            SkySettings.forQuality(renderer.quality(), PLACE));
+            SkySettings.forQuality(renderer.quality(), new Observer(LATITUDE, LONGITUDE, real ? 0 : 800)));
         scene.components().set(renderer.skyNode(), SkyComponents.SKY_TIME, SkyTime.of(MIDNIGHT, 1));
         settings.set(AutoExposure.HISTOGRAM.setting("key"), AutoExposure.KeyValue.KRAWCZYK);
-        // The valley's mist at dawn: flat ellipsoids along the valley floor, the stream's meadows
-        double[][] banks = {{20, 60, 160, 9, 90}, {-30, -80, 140, 8, 110}, {70, 180, 200, 10, 120},
-            {-40, 260, 180, 12, 140}, {60, -220, 160, 9, 120}};
+        // The valley's mist at dawn: flat ellipsoids along the valley floor, over the river's meadows
+        double[][] banks = real ? new double[][] {{-60, -600, 220, 14, 300}, {-20, 0, 240, 15, 320},
+            {-80, 600, 260, 16, 340}, {-60, 1300, 260, 16, 360}, {-40, 2100, 260, 18, 380}}
+            : new double[][] {{20, 60, 160, 9, 90}, {-30, -80, 140, 8, 110}, {70, 180, 200, 10, 120},
+                {-40, 260, 180, 12, 140}, {60, -220, 160, 9, 120}};
         for (double[] b : banks) {
             long node = scene.create();
             scene.setTranslation(node, b[0], ground.height(b[0], b[1]) + b[3] * 0.25, b[1]);
             mist.add(new long[] {node});
             scene.components().set(node, FogVolume.TYPE, FogVolume.ellipsoid(new Vec3(b[2], b[3], b[4]), 0)
-                .withFalloff(0.35f));
+                .withFalloff(0.35f).withBlendDistance(40));
         }
+        this.layout = layout;
+        fireworks = new FireworksSync(renderer.effects(), settings);
+        show = scene.create();
+        double sx = layout.originX() + 70;
+        double sz = layout.originZ() + 150;
+        scene.setTranslation(show, sx, ground.height(sx, sz), sz);
         weatherFx = scene.create();
         snow = renderer.effects().play(VillageEffects.SNOW, weatherFx).set(VillageEffects.RATE, 0);
         rain = renderer.effects().play(VillageEffects.RAIN, weatherFx).set(VillageEffects.RATE, 0);
@@ -115,7 +133,7 @@ public final class DayDriver {
             weather = state.weather;
         }
         if (state.storm && !stormSpawned) {
-            renderer.weather().spawnStorm(-1500, 0, -2500); // up the valley, upwind: it drifts over the village
+            renderer.weather().spawnStorm(-500, 0, -900); // up the valley, upwind: it drifts over the village
             stormSpawned = true;
         }
         if (!state.storm) {
@@ -133,7 +151,7 @@ public final class DayDriver {
         }
         // snow lying and falling, rain
         renderer.hooks().set(SimpleSnow.HOOK, SnowParameters.DEFAULTS.withCoverage((float) state.snowCover)
-            .withSnowfall((float) state.snowfall), true);
+            .withSnowfall((float) state.snowfall).withNoiseScale(1.4f).withNoiseSharpness(3), true);
         scene.setTranslation(weatherFx, x, y + 14, z);
         snow.set(VillageEffects.RATE, (float) Math.max(state.snowfall, 1e-4) * (state.snowfall > 0 ? 1 : 0));
         rain.set(VillageEffects.RATE, (float) state.rain);
@@ -155,15 +173,19 @@ public final class DayDriver {
             e.set(VillageEffects.FLAME, f, f, f, 1).set(VillageEffects.EMBER, em, em, em, 1)
                 .set(VillageEffects.GLOW, g, g, g, 1);
         }
-        // fireworks over the square, from the meadow behind the church
-        if (state.fireworks && time >= nextLaunch) {
-            float s = (float) (VillageEffects.SPARK_LUMINANCE * units);
-            double lx = 45 + launches.nextDouble(-8, 8);
-            double lz = -5 + launches.nextDouble(-14, 14);
-            renderer.effects().play(VillageEffects.LAUNCH, lx, ground.height(lx, lz), lz)
-                .set(VillageEffects.SPARK, s, s, s, 1);
-            nextLaunch = time + launches.nextDouble(0.5, 1.8);
+        // the fireworks show on the meadow south of the village (effects-particles-fireworks: shells in physical
+        // units, the units the pre-exposure's), played from when its display component is set
+        settings.set(FireworksSettings.LUMINANCE_SCALE, (float) units);
+        if (state.fireworks != showing) {
+            if (state.fireworks) {
+                scene.components().set(show, FireworkDisplay.TYPE, FireworkDisplay.of(FireworkShow.random(1026, 24,
+                    1.4, 70).and(FireworkShow.finale(1027, 22, 10, 36, 80))));
+            } else {
+                scene.components().remove(show, FireworkDisplay.TYPE);
+            }
+            showing = state.fireworks;
         }
+        fireworks.update(seconds);
         // shadows: the sun's while it is up, the moon's at night
         atmosphere.sunDirection(scratch);
         boolean sunUp = scratch[1] > -0.03;
@@ -216,7 +238,7 @@ public final class DayDriver {
         double moonLux = 0;
         atmosphere.lightAtCamera(1, colour);
         moonLux = (0.2126 * colour[0] + 0.7152 * colour[1] + 0.0722 * colour[2]) / units;
-        double illuminance = sunLux * Math.max(sunUp, 0) * clouds * clouds + Math.PI * skyRadiance * clouds + moonLux * 0.3
+        double illuminance = sunLux * Math.max(sunUp, 0) * renderer.direct() + Math.PI * skyRadiance * clouds + moonLux * 0.3
             + 25 * Math.max(state.lamps, state.rooms);
         double luminance = 0.18 * illuminance / Math.PI;
         double target = Math.clamp(AtmosphereExposure.ev100(luminance), -3, 15);
