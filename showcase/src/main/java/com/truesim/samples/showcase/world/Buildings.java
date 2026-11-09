@@ -59,7 +59,7 @@ public final class Buildings {
         }
     }
 
-    static final double ROOF_OVERHANG = 1.3;
+    static final double ROOF_OVERHANG = 1.5;
     static final double STONE_THICK = 0.45;
     static final double UPPER_THICK = 0.22;
     static final double FRAME = 0.07;
@@ -143,7 +143,14 @@ public final class Buildings {
             front.add(new double[] {doorX - 0.5, 0, 1.0, 2.1, 1});
             front.add(new double[] {hw * 0.3, 0.9, 1.0, 1.15, 0});
         }
-        List<double[]> back = List.of(new double[] {-hw * 0.4 - 0.5, 0.9, 1.0, 1.15, 0});
+        List<double[]> back = new ArrayList<>(List.of(new double[] {-hw * 0.4 - 0.5, 0.9, 1.0, 1.15, 0}));
+        // the openings above are about the house's middle (as the door's fitting is); a wall counts from its start
+        for (double[] o : front) {
+            o[0] += hw;
+        }
+        for (double[] o : back) {
+            o[0] = hw - o[0] - o[2];
+        }
         List<double[]> side = windowsAlong(d, 0.9, 1.0, 1.15, cafe ? 2 : 2 + random.nextInt(2));
         wall(kit, p(-hw, 0, hd), p(1, 0, 0), w, g, gt, front, groundOuter, INTERIOR, TRIM, true);
         wall(kit, p(hw, 0, -hd), p(-1, 0, 0), w, g, gt, back, groundOuter, INTERIOR, TRIM, true);
@@ -176,6 +183,21 @@ public final class Buildings {
             shutters(kit, p(hw, 0, hd), p(0, 0, -1), side);
             shutters(kit, p(-hw, 0, -hd), p(0, 0, 1), side);
         }
+        // the timber's frame on the face: a sill beam round the house at the upper floor, corner posts up to the eaves
+        double band = 0.11;
+        kit.to(TRIM);
+        kit.box(p(-hw - band, floor - 0.12, -hd - band), p(hw + band, floor + 0.14, -hd + 0.02), 1, false);
+        kit.box(p(-hw - band, floor - 0.12, hd - 0.02), p(hw + band, floor + 0.14, hd + band), 1, false);
+        kit.box(p(-hw - band, floor - 0.12, -hd), p(-hw + 0.02, floor + 0.14, hd), 1, false);
+        kit.box(p(hw - 0.02, floor - 0.12, -hd), p(hw + band, floor + 0.14, hd), 1, false);
+        for (int sx = -1; sx <= 1; sx += 2) {
+            for (int sz = -1; sz <= 1; sz += 2) {
+                double x = sx * hw;
+                double z = sz * hd;
+                kit.box(p(Math.min(x, x + sx * 0.09) - 0.06, floor + 0.14, Math.min(z, z + sz * 0.09) - 0.06),
+                    p(Math.max(x, x + sx * 0.09) + 0.06, top, Math.max(z, z + sz * 0.09) + 0.06), 1, false);
+            }
+        }
         // gables: the upper walls' triangles up to the roof, front and back, timber
         double rise = (hw + ROOF_OVERHANG) * Maths.tan(Maths.toRadians(spec.pitch()));
         double gableTop = top + hw * Maths.tan(Maths.toRadians(spec.pitch()));
@@ -197,11 +219,13 @@ public final class Buildings {
         kit.to(STONE).box(p(c[0] - 0.4, top - 0.5, c[2] - 0.4), p(c[0] + 0.4, c[1], c[2] + 0.4), 2, false);
         kit.to(TRIM).box(p(c[0] - 0.5, c[1], c[2] - 0.5), p(c[0] + 0.5, c[1] + 0.08, c[2] + 0.5), 1, false);
         hearth(kit, fit.fire(), hd, gt);
-        // the door: planks set back in its opening
-        kit.to(TRIM).box(p(doorX - 0.5, 0, hd - gt * 0.7), p(doorX + 0.5, 2.1, hd - gt * 0.7 + 0.06), 1, false);
+        // the door: planks set back in its opening; the café's glazed and standing open, swung in against the wall
+        // (the tour walks in through it)
         if (cafe) {
-            // the door is glazed: its glass
-            kit.to(GLASS).rect(p(doorX - 0.45, 0.9, hd - gt * 0.7 + 0.07), p(0.9, 0, 0), p(0, 1.1, 0), 1);
+            kit.to(TRIM).box(p(doorX + 0.56, 0, hd - gt - 1.12), p(doorX + 0.62, 2.25, hd - gt), 1, false);
+            kit.to(GLASS).rect(p(doorX + 0.63, 0.9, hd - gt - 1.05), p(0, 0, 0.98), p(0, 1.15, 0), 1);
+        } else {
+            kit.to(TRIM).box(p(doorX - 0.5, 0, hd - gt * 0.7), p(doorX + 0.5, 2.1, hd - gt * 0.7 + 0.06), 1, false);
         }
         return kit;
     }
@@ -277,8 +301,18 @@ public final class Buildings {
             if (o[4] > 0) {
                 continue; // a door: its leaf is the building's
             }
+            // a sill outside, sloping the rain off: a board standing out of the wall under the window
+            double[] out = MeshKit.scale(in, -1);
+            double[] sill = MeshKit.add(MeshKit.add(a, MeshKit.scale(along, -0.06)), p(0, -0.07, 0));
+            kit.to(reveal);
+            beam(kit, MeshKit.add(sill, MeshKit.scale(in, 0.05)), MeshKit.scale(along, x1 - x0 + 0.12),
+                p(0, 0.07, 0), MeshKit.scale(out, 0.16));
+            // and a lintel beam over it
+            double[] lintel = MeshKit.add(MeshKit.add(a, MeshKit.scale(along, -0.12)), p(0, y1 - y0, 0));
+            beam(kit, MeshKit.add(lintel, MeshKit.scale(in, 0.02)), MeshKit.scale(along, x1 - x0 + 0.24),
+                p(0, 0.16, 0), MeshKit.scale(out, 0.06));
             // the frame, in the middle of the wall's depth, and the glass
-            double depth = framed ? thick * 0.55 : thick * 0.5;
+            double depth = framed ? thick * 0.6 : thick * 0.7;
             double[] f = MeshKit.add(a, MeshKit.scale(in, depth));
             frame(kit, f, along, in, x1 - x0, y1 - y0);
             kit.to(GLASS).rect(MeshKit.add(f, MeshKit.scale(in, 0.02)), MeshKit.scale(along, x1 - x0),
@@ -348,7 +382,7 @@ public final class Buildings {
         double pitch = Maths.toRadians(spec.pitch());
         double run = hw + ROOF_OVERHANG;
         double slope = run / Maths.cos(pitch);
-        double thick = 0.22;
+        double thick = 0.3;
         double len = 2 * (hd + ROOF_OVERHANG);
         double eave = top - ROOF_OVERHANG * Maths.tan(pitch) + 0.15;
         double ridge = eave + rise;
@@ -372,6 +406,26 @@ public final class Buildings {
             kit.to(TRIM).rectFacing(lowEdge, alongRidge, lift, 1, outward);
             kit.to(TRIM).rectFacing(lowEdge, lift, upSlope, 1, p(0, 0, 1));
             kit.to(TRIM).rectFacing(MeshKit.add(lowEdge, alongRidge), lift, upSlope, 1, p(0, 0, -1));
+        }
+        // under the eaves, the rafters' ends standing out of the walls to the fascia, every 0.9 m
+        double rafter = 0.16;
+        for (int side = -1; side <= 1; side += 2) {
+            double[] lowEdge = p(side * run, eave, 0);
+            double[] toWall = p(-side * ROOF_OVERHANG, ROOF_OVERHANG * Maths.tan(pitch), 0);
+            for (double z = -hd - ROOF_OVERHANG + 0.3; z < hd + ROOF_OVERHANG - 0.2; z += 0.9) {
+                double[] o = MeshKit.add(lowEdge, p(side * -0.05, -rafter, z));
+                kit.to(TRIM);
+                beam(kit, o, MeshKit.scale(toWall, 1.05), p(0, rafter, 0), p(0, 0, 0.12));
+            }
+        }
+        // at the gables, the purlins' ends under the verges: the ridge's and one down each slope
+        for (int end = -1; end <= 1; end += 2) {
+            double z0 = end * hd;
+            for (double x : new double[] {0, -hw * 0.5, hw * 0.5}) {
+                double under = eave + (run - Math.abs(x)) / run * rise;
+                kit.to(TRIM).box(p(x - 0.11, under - 0.26, Math.min(z0, z0 + end * ROOF_OVERHANG)),
+                    p(x + 0.11, under - 0.02, Math.max(z0, z0 + end * ROOF_OVERHANG)), 1, false);
+            }
         }
         // the ridge cap
         kit.to(ROOF).box(p(-0.18, ridge + thick - 0.05, -hd - ROOF_OVERHANG),

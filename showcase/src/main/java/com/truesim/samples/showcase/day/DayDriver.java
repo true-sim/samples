@@ -38,7 +38,7 @@ import java.util.List;
 
 /**
  * Makes the world follow a {@link DayState} every frame: the sky's clock (the sun, the moon and the stars from the
- * ephemeris for Lauterbrunnen, 46.59° N 7.91° E, on 24 October 2026), the weather's preset and
+ * ephemeris for Lauterbrunnen, 46.59° N 7.91° E, on 26 September 2026, a full moon), the weather's preset and
  * pace, the height fog and the valley's mist (fog volumes), the snow's cover and fall (the snow hook and the flakes),
  * rain, the lamps, the rooms' lights, the hearths and the fireworks, the camera's depth of field, and the exposure.
  *
@@ -57,10 +57,15 @@ public final class DayDriver {
      */
     public static final double LATITUDE = 46.5937;
     public static final double LONGITUDE = 7.9087;
-    /** When: local midnight (CEST, UTC+2) starting 24 October 2026. */
-    public static final Instant MIDNIGHT = Instant.parse("2026-10-23T22:00:00Z");
+    /**
+     * When: local midnight (CEST, UTC+2) starting 26 September 2026: late September, berries ripe, the first leaves
+     * turning, an early snowfall at dusk, and a full moon over the night.
+     */
+    public static final Instant MIDNIGHT = Instant.parse("2026-09-25T22:00:00Z");
     /** A street lamp's glass and a bulb, cd/m² at full brightness. */
     static final double LAMP_GLOW = 12_000;
+    /** How much brighter than the moon's own the night's moonlight is drawn (day-for-night's art). */
+    static final double MOONLIGHT = 10;
     static final double ROOM_GLOW = 20_000;
 
     private final ShowcaseRenderer renderer;
@@ -92,8 +97,11 @@ public final class DayDriver {
         scene = renderer.scene();
         settings = renderer.settings();
         atmosphere = renderer.atmosphere();
+        // the stars a full moon's sky leaves: to the fourth and a half magnitude (some 800 over the sky), not the dark
+        // sky's thousands, which read as a dense field over a moonlit valley
+        SkySettings sky = SkySettings.forQuality(renderer.quality(), new Observer(LATITUDE, LONGITUDE, real ? 0 : 800));
         scene.components().set(renderer.skyNode(), SkyComponents.SKY,
-            SkySettings.forQuality(renderer.quality(), new Observer(LATITUDE, LONGITUDE, real ? 0 : 800)));
+            sky.withStars(sky.stars().withLimitingMagnitude(4.5).withBrightness(0.6)));
         scene.components().set(renderer.skyNode(), SkyComponents.SKY_TIME, SkyTime.of(MIDNIGHT, 1));
         settings.set(AutoExposure.HISTOGRAM.setting("key"), AutoExposure.KeyValue.KRAWCZYK);
         // The valley's mist at dawn: flat ellipsoids along the valley floor, over the river's meadows
@@ -134,7 +142,8 @@ public final class DayDriver {
             weather = state.weather;
         }
         if (state.storm && !stormSpawned) {
-            renderer.weather().spawnStorm(-500, 0, -900); // up the valley, upwind: it drifts over the village
+            // up the valley, upwind: it drifts over the village
+            renderer.weather().spawnStorm(-500, renderer.weather().domain().ground(), -900);
             stormSpawned = true;
         }
         if (!state.storm) {
@@ -150,12 +159,18 @@ public final class DayDriver {
                     v.albedo(), v.falloff(), v.blendDistance()));
             }
         }
-        // snow lying and falling, rain
+        // snow lying and falling, rain: a smooth cover, thinning on slopes (gone past 50 degrees) and where the sky does
+        // not reach (the occlusion map: under eaves and trees), its noise only a broad, soft unevenness
         renderer.hooks().set(SimpleSnow.HOOK, SnowParameters.DEFAULTS.withCoverage((float) state.snowCover)
-            .withSnowfall((float) state.snowfall).withNoiseScale(1.4f).withNoiseSharpness(3), true);
+            .withSnowfall((float) state.snowfall).withNoiseScale(0.07f).withNoiseSharpness(0.7f).withSlopeStart(18)
+            .withSlopeEnd(50), true);
         scene.setTranslation(weatherFx, x, y + 14, z);
         snow.set(VillageEffects.RATE, (float) Math.max(state.snowfall, 1e-4) * (state.snowfall > 0 ? 1 : 0));
         rain.set(VillageEffects.RATE, (float) state.rain);
+        // each drop carries a tenth of the sky's luminance under the clouds (it shows the sky, a few pixels wide)
+        atmosphere.skyAmbient(colour);
+        float sky = (float) (0.1 * Math.clamp(renderer.environment().intensity(), 0.02, 1.5));
+        rain.set(VillageEffects.DROPS, (float) colour[0] * sky, (float) colour[1] * sky, (float) colour[2] * sky, 0.6f);
         // the lights and what glows, in scene units
         double units = atmosphere.sceneUnits();
         lights(village.lamps(), state.lamps * units);
@@ -163,6 +178,9 @@ public final class DayDriver {
         double[] lamp = {LAMP_GLOW * state.lamps * units, LAMP_GLOW * 0.82 * state.lamps * units,
             LAMP_GLOW * 0.55 * state.lamps * units};
         renderer.assets().resources().animate(village.lampGlow, "emissive", lamp, 0, 3);
+        // the lantern's frosted glass round the bulb: lit from within, a fifth of the bulb's luminance
+        double[] glass = {lamp[0] * 0.2, lamp[1] * 0.2, lamp[2] * 0.2};
+        renderer.assets().resources().animate(village.lampGlass, "emissive", glass, 0, 3);
         double[] room = {ROOM_GLOW * state.rooms * units, ROOM_GLOW * 0.78 * state.rooms * units,
             ROOM_GLOW * 0.5 * state.rooms * units};
         renderer.assets().resources().animate(village.roomGlow, "emissive", room, 0, 3);
@@ -187,8 +205,11 @@ public final class DayDriver {
             showing = state.fireworks;
         }
         fireworks.update(seconds);
-        // shadows: the sun's while it is up, the moon's at night
+        // the moonlight, art-directed as night films are: the full moon's quarter lux times MOONLIGHT, so the valley
+        // reads in blue light under the lamps rather than black
         atmosphere.sunDirection(scratch);
+        renderer.moonBoost(scratch[1] < -0.05 ? MOONLIGHT : 1);
+        // shadows: the sun's while it is up, the moon's at night
         boolean sunUp = scratch[1] > -0.03;
         renderer.lights().shadow(renderer.sunLight(), sunUp ? sunShadow() : ShadowSpec.NONE);
         renderer.lights().shadow(renderer.moonLight(), sunUp ? ShadowSpec.NONE : moonShadow());
@@ -204,6 +225,10 @@ public final class DayDriver {
     }
 
     private ShadowSpec sunShadow() {
+        if ("rayTraced".equals(settings.get(com.truesim.samples.showcase.ShowcaseSettings.SUN_SHADOWS))
+            && renderer.globalIllumination()) {
+            return ShadowSpec.softRayTraced(0.0047); // the sun's angular radius
+        }
         ShadowSpec spec = renderer.lights().shadow(renderer.sunLight());
         return spec.method() == com.truesim.scene.core.ShadowMethod.NONE
             ? ShadowSpec.cascades(4, renderer.quality() == com.truesim.effects.atmosphere.Quality.LOW ? 2048 : 4096,
@@ -239,8 +264,8 @@ public final class DayDriver {
         double moonLux = 0;
         atmosphere.lightAtCamera(1, colour);
         moonLux = (0.2126 * colour[0] + 0.7152 * colour[1] + 0.0722 * colour[2]) / units;
-        double illuminance = sunLux * Math.max(sunUp, 0) * renderer.direct() + Math.PI * skyRadiance * clouds + moonLux * 0.3
-            + 25 * Math.max(state.lamps, state.rooms);
+        double illuminance = sunLux * Math.max(sunUp, 0) * renderer.direct() + Math.PI * skyRadiance * clouds
+            + moonLux * renderer.moonBoost() * 0.3 + 25 * Math.max(state.lamps, state.rooms);
         double luminance = 0.18 * illuminance / Math.PI;
         double target = Math.clamp(AtmosphereExposure.ev100(luminance), -3, 15);
         ev = first ? target : AtmosphereExposure.adapt(ev, target, seconds, 1.5);

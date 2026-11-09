@@ -96,7 +96,7 @@ public final class TourScript {
                 {0, 12, 3.5, 205, 0, 8, 0}, {17, 6, 3, 128, 4, 8, -10}}),
             shot("street", 17, 15, new double[][] {
                 {0, 7, 1.8, 76, -2, 4, 0}, {15, 3, 9, 46, -4, 5, -60}})),
-            List.of(new double[] {0, 7.35, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 8.15, 0.0005, 0.0015, 0,
+            List.of(new double[] {0, 6.95, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 7.7, 0.0005, 0.0015, 0,
                 0, 0, 0, 0.3}),
             s -> {
                 s.weather = WeatherPreset.FAIR;
@@ -114,9 +114,10 @@ public final class TourScript {
                     {0, 110, 30, 95, 0, 10, -10}, {14, 82, 22, 50, -10, 6, -30}}),
             shot("square", 14, 15, new double[][] {
                 {0, -1, 1.7, 32, 1, 2.5, -14}, {15, 0.5, 1.7, 0, 1.5, 2, -14}}),
+            // straight in through the café's open door (plan x 1, the square's front 13.55 m north), to its mirror
             shot("cafe window", 29, 13, new double[][] {
-                {0, 1.9, 1.7, -9.6, 1.6, 1.6, -22.5}, {6, 1.2, 1.75, -12.9, 2, 1.7, -22.5}, {13, 1, 1.8, -16.6,
-                    2.4, 1.8, -22.5}})),
+                {0, 1.0, 2.3, -8.0, 0.4, 2.2, -22.5}, {6, 1.0, 2.5, -12.2, 0.2, 2.4, -22.5}, {13, 0.9, 2.6, -16.6,
+                    -0.2, 2.5, -22.5}})),
             List.of(new double[] {0, 12.7, 0.00025, 0, 0, 0, 0, 0, 0}, new double[] {29, 13.2, 0.00025, 0, 0, 0, 0, 0,
                 0.9}, new double[] {42, 13.4, 0.00025, 0, 0, 0, 0, 0, 1}),
             s -> {
@@ -133,14 +134,14 @@ public final class TourScript {
                 {0, -3, 2.2, 62, 0, 5, 0}, {17, -2, 2, 34, 2, 6, -10}})
                 : shot("climb", 0, 17, new double[][] {
                     {0, 30, 6, 40, -20, 6, -10}, {9, 120, 30, 70, -10, 6, -10}, {17, 215, 6, 85, -20, 10, -40}}),
-            real ? landscape("up the valley", 17, 17, new double[][] {
-                {0, -90, 6, 900, -130, 60, 0}, {17, -80, 8, 780, -120, 80, -200}})
+            real ? landscape("up the valley", 17, 17, new double[][] { // over the treetops
+                {0, -90, 45, 900, -130, 60, 0}, {17, -80, 50, 780, -120, 80, -200}})
                 : shot("ridge", 17, 17, new double[][] {
                     {0, 200, 4, 70, 0, 12, -10}, {17, 182, 4, 25, -10, 12, -40}})),
-            List.of(new double[] {0, 15.7, 0.0005, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0007, 0, 0, 0, 1,
-                0.3, 0.8}, new double[] {34, 16.3, 0.0008, 0, 0, 0, 1, 0.5, 1}),
+            List.of(new double[] {0, 15.7, 0.0003, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0004, 0, 0, 0, 1,
+                0.3, 0.8}, new double[] {34, 16.3, 0.00045, 0, 0, 0, 1, 0.5, 1}),
             s -> {
-                // nimbostratus over the valley (lifted to its floor) and a storm cell in it
+                // nimbostratus over the valley (standing on its floor) and a storm cell in it
                 s.weather = WeatherPreset.RAIN;
                 s.weatherRate = 2;
                 s.fogFalloff = 0.01;
@@ -154,10 +155,10 @@ public final class TourScript {
                 {0, -3.2, 2.3, 78, 0, 3, 20}, {18, -1.8, 2.1, 34, 2, 3, -10}}),
             shot("square in snow", 18, 18, new double[][] {
                 {0, -14, 5.5, 10, 2, 1.5, -6}, {9, -6, 4.5, 11.5, 4, 1.5, -8}, {18, 6, 4, 10, 2, 1.5, -10}})),
-            List.of(new double[] {0, 18.1, 0.0003, 0, 0.4, 0.15, 0, 1, 1}, new double[] {14, 18.3, 0.0004, 0, 0.9,
-                0.75, 0, 1, 1}, new double[] {36, 18.6, 0.0005, 0, 1, 1, 0, 1, 1}),
+            List.of(new double[] {0, 19.05, 0.0003, 0, 0.4, 0.15, 0, 1, 1}, new double[] {14, 19.25, 0.0004, 0, 0.9,
+                0.75, 0, 1, 1}, new double[] {36, 19.55, 0.0005, 0, 1, 1, 0, 1, 1}),
             s -> {
-                s.weather = WeatherPreset.ALTOSTRATUS;
+                s.weather = WeatherPreset.BROKEN; // snow showers from a broken deck, the afterglow in its gaps
                 s.weatherRate = 3;
                 s.fogFalloff = 0.02;
                 s.fires = true;
@@ -170,7 +171,7 @@ public final class TourScript {
                 {0, 2, 1.7, 8, 10, 150, -150}, {16, -2, 1.7, 3, 10, 160, -150}}),
             shot("village at night", 16, 18, new double[][] {
                 {0, -20, 4, 120, 5, 110, -150}, {18, -10, 4, 95, 5, 120, -150}})),
-            List.of(new double[] {0, 21.0, 0.0004, 0, 0, 0.95, 0, 1, 1}, new double[] {34, 21.3, 0.0004, 0, 0, 0.95,
+            List.of(new double[] {0, 23.5, 0.0004, 0, 0, 0.95, 0, 1, 1}, new double[] {34, 23.8, 0.0004, 0, 0, 0.95,
                 0, 1, 1}),
             s -> {
                 s.weather = WeatherPreset.CLEAR;

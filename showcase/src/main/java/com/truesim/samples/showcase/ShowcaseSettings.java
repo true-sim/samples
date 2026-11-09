@@ -22,6 +22,17 @@ public final class ShowcaseSettings {
     public static final Setting<String> TERRAIN = Setting.text("showcase.terrain",
         System.getProperty("user.home") + "/.truesim/terrain",
         "effects-terrain's cache with the Lauterbrunnen site (./gradlew :samples-showcase:fetchTerrain fills it)");
+    /**
+     * The sun's shadows: {@code cascades} (four shadow-map cascades, PCSS-soft: the grass's blades cast too) or
+     * {@code rayTraced} (traced per pixel, soft from the sun's disc, denoised: exact contact, no cascade seams, but
+     * rays see no grass and trees at their ray-tracing level).
+     */
+    public static final Setting<String> SUN_SHADOWS = Setting.text("showcase.sunShadows", "cascades",
+        "the sun's shadows: cascades or rayTraced");
+    /** Where common-procedural keeps the trees and flowers it generated (made once, read on later runs). */
+    public static final Setting<String> PROCEDURAL = Setting.text("showcase.procedural",
+        System.getProperty("user.home") + "/.truesim/procedural",
+        "common-procedural's generation cache: the showcase's trees, shrubs and flowers");
     /** The quality preset: low, medium, high or ultra (the atmosphere's, the clouds', the shadows', the GI's). */
     public static final Setting<String> QUALITY = Setting.text("showcase.quality", "high",
         "the quality preset: low, medium, high or ultra");
@@ -61,8 +72,8 @@ public final class ShowcaseSettings {
         "measure frame times per segment of the tour (GPU timestamps)");
 
     /** Every one of them. */
-    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS, EVERY,
-        PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
+    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
+        EVERY, PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
 
     private ShowcaseSettings() {
     }

@@ -111,7 +111,7 @@ effect of the engine and its libraries on at once, in physical units from noon t
 
 - **Content, fetched on demand.** Poly Haven's CC0 textures (4K where the camera comes close: the square's
   cobbles, the walls, the planks, the roofs, the café's parquet; 2K elsewhere) and models (street lamps, café
-  furniture, a mirror, barrels, crates, benches, rocks, saplings standing in for trees), pinned in
+  furniture, a mirror, barrels, crates, benches, rocks; bark, a bedded cliff for the terrain's rock), pinned in
   [showcase/polyhaven.tsv](showcase/polyhaven.tsv) (URL, size, SHA-256) and credited in
   [showcase/CREDITS.md](showcase/CREDITS.md): `./gradlew :samples-showcase:fetchAssets` downloads what the cache
   (`~/.truesim/polyhaven`) lacks and checks every file. The terrain is effects-terrain's Lauterbrunnen site (swissALTI3D
@@ -126,11 +126,20 @@ effect of the engine and its libraries on at once, in physical units from noon t
   and the environment's behind them), a church with a bell tower and spire, street lamps, lanterns, a gravel road,
   fences and rocks. Placement asks the ground (`Ground`: effects-terrain's `heightAt`, or the made-up valley), never a
   constant.
+- **The vegetation** (`Flora`): effects-vegetation's GPU grass over the valley floor (a `GrassField` on a ground map
+  cleared from the square, the buildings and the road, swaying in the day's wind, pressed by the dusk's snow), and
+  common-procedural's trees, shrubs, dwarf shrubs and flowers where its ecology puts them on Lauterbrunnen's terrain
+  (`Ecology` over effects-terrain's surface, meadows kept open below the forest; 21 species, three variants each,
+  generated for late September: rowan berries, ripe apples, the first leaves turning), one `PlantScatter` per species
+  and variant holding the ecology's instances. Trees are cluster hierarchies rebuilt from the generator's level 1
+  (`FloraModels`); their leaf atlases are drawn in code, their bark Poly Haven's. Generated meshes are cached in
+  `~/.truesim/procedural` (`-Pprocedural=<dir>`).
 - **Streaming** through scene-world: the terrain's own pyramid of tiles to 120 km, 64 m cells of buildings, lamps and
   lights within 3 km and 32 m cells of small props within 250 m, one world, interest following the camera.
-- **The day** (`DayDriver`, 24 October 2026): the sun, the moon and the stars from effects-atmosphere's ephemeris for
-  Lauterbrunnen; effects-weather's presets (fair, scattered cumulus with their shadows, rain under a storm cell with
-  lightning, overcast, clear); height fog and the valley's mist in fog volumes at dawn; snow falling (lit flakes that
+- **The day** (`DayDriver`, 26 September 2026, a full moon): the sun, the moon and the stars from effects-atmosphere's
+  ephemeris for Lauterbrunnen; effects-weather's presets (fair, scattered cumulus with their shadows, rain under a
+  storm cell with lightning, broken cloud at dusk, clear), the weather's ground the valley floor
+  (`WeatherDomain.flat(ground)`); height fog and the valley's mist in fog volumes at dawn; snow falling (lit flakes that
   flutter, `showcase.flutter`, a particle module of the showcase's own) and settling (`weather.snow`); rain; lamps,
   rooms and hearths coming on; effects-particles-fireworks' show at night. Light is in the atmosphere's scene units:
   the EV100 pre-exposure follows the day's light (eased), effects-post's histogram auto exposure takes the units

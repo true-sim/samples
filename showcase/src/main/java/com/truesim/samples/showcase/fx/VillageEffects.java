@@ -34,6 +34,8 @@ public final class VillageEffects {
     public static final EffectParameter.Color FLAME = EffectParameter.ofColor("flame");
     /** Embers' colour. */
     public static final EffectParameter.Color EMBER = EffectParameter.ofColor("ember");
+    /** The rain's drops: the sky's light they carry (reflected and refracted), scene units, set each frame. */
+    public static final EffectParameter.Color DROPS = EffectParameter.ofColor("drops");
     /** A fire's flickering light's colour (times the light's intensity). */
     public static final EffectParameter.Color GLOW = EffectParameter.ofColor("glow");
     /** Snowflakes or raindrops a second, of the effect's most. */
@@ -61,7 +63,7 @@ public final class VillageEffects {
     public static final EffectData CHIMNEY = chimney();
     /** Snowflakes in a box about the camera, lit per vertex, fluttering as they fall, settling on what they hit. */
     public static final EffectData SNOW = snow();
-    /** Rain in a box about the camera: streaks along their fall, lit per vertex. */
+    /** Rain in a box about the camera: streaks along their fall, carrying the sky's light ({@link #DROPS}). */
     public static final EffectData RAIN = rain();
 
     private VillageEffects() {
@@ -153,16 +155,18 @@ public final class VillageEffects {
     }
 
     private static EffectData rain() {
-        float perSecond = 30000;
-        return EffectData.builder().parameter(RATE, 1)
+        // heavy rain close round the camera: streaks a metre long a few metres off, catching the light
+        float perSecond = 45000;
+        return EffectData.builder().parameter(RATE, 1).parameter(DROPS, 1, 1, 1, 1)
             .emitter("drops", e -> e.space(Space.WORLD).capacity(100_000)
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
-                .init(Shape.box(50, 3, 50), Init.velocity(Bind.random(-0.4f, 0.4f), Bind.random(-9.5f, -8),
-                    Bind.random(-0.4f, 0.4f)), Init.lifetime(Bind.random(2.6f, 3)),
-                    Init.size(Bind.random(0.006f, 0.01f)), Init.color(Bind.color(0.75f, 0.8f, 0.85f, 0.45f)))
+                .init(Shape.box(32, 3, 32), Init.velocity(Bind.random(-0.4f, 0.4f), Bind.random(-9.5f, -8),
+                    Bind.random(-0.4f, 0.4f)), Init.lifetime(Bind.random(1.9f, 2.2f)),
+                    Init.size(Bind.random(0.012f, 0.02f)), Init.color(Bind.param(DROPS)))
                 .update(Forces.wind(0.5f))
                 .collide(Collide.rays().orElse(Collide.height()).kill())
-                .render(Renderer.billboard(Renderer.Facing.VELOCITY).lighting(Renderer.Lighting.PER_VERTEX)
+                // a drop shows the sky it reflects and bends towards the eye: added light, the sky's
+                .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive()
                     .set("stretch", 0.12f).set("soft", 0.05f).asset("texture", FxTextures.EMBER)))
             .build(ShowcaseParticleModules.MODULES.registry());
     }

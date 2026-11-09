@@ -75,7 +75,7 @@ public final class ShowcaseProbe {
 
                 scene.components().set(world.skyNode(), SkyComponents.SKY,
                     SkySettings.forQuality(world.quality(), new Observer(47.04, 12.84, 1290)));
-                Instant midnight = Instant.parse("2026-10-23T22:00:00Z"); // local midnight, CEST
+                Instant midnight = Instant.parse("2026-09-25T22:00:00Z"); // local midnight, CEST
                 scene.components().set(world.skyNode(), SkyComponents.SKY_TIME, SkyTime.of(midnight, 1));
                 settings.set(AtmosphereSky.ATMOSPHERE.setting("ev100"), 13f);
                 settings.set(AutoExposure.HISTOGRAM.setting("luminanceScale"), (float) (1.2 * Maths.pow(2, 13)));

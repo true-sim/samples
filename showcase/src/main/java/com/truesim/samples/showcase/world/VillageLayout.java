@@ -8,14 +8,14 @@ import java.util.List;
 import java.util.SplittableRandom;
 
 /**
- * Where everything in the village is, as data: buildings, Poly Haven's props, lamps, paths, fences, rocks and the
- * stand-in trees. Positions are on the ground plan only (x east, z south); heights come from the {@link Ground} when
+ * Where everything in the village is, as data: buildings, Poly Haven's props, lamps, paths, fences and rocks (the
+ * trees, shrubs and flowers are the ecology's: {@code Flora}). Positions are on the ground plan only (x east, z south); heights come from the {@link Ground} when
  * things are placed, so the same plan stands on the temporary valley and on effects-terrain's elevation data.
  *
  * <p>The plan: a cobbled square at the origin; the café on its north side facing the square (south, the sun), the
  * church east of it, its bell tower at the square's corner; chalets on the square's west side and along the street
  * running south through the meadow and north up the valley; farmhouses scattered on the slopes; wooden fences along
- * the pastures, mossy rocks, and trees at the forest's edge.
+ * the pastures, mossy rocks at the forest's edge.
  */
 public final class VillageLayout {
 
@@ -56,8 +56,8 @@ public final class VillageLayout {
     }
 
     /**
-     * The plan with its square at ({@code originX}, {@code originZ}) of the world; rocks and the stand-in trees kept
-     * off ground steeper than they would lie on ({@code ground}, null: all kept).
+     * The plan with its square at ({@code originX}, {@code originZ}) of the world; rocks kept off ground steeper than
+     * they would lie on ({@code ground}, null: all kept).
      */
     public VillageLayout(double originX, double originZ, Ground ground) {
         this.originX = originX;
@@ -185,18 +185,6 @@ public final class VillageLayout {
                 props.add(new Prop(model, x, -0.15 * scale, z, rocks.nextDouble(0, 2 * Math.PI), scale, null));
             }
         }
-        // stand-in trees on the slopes until common-procedural's forest lands: Poly Haven's saplings, scaled up
-        SplittableRandom trees = new SplittableRandom(23);
-        for (int i = 0; i < 90; i++) {
-            double side = trees.nextBoolean() ? 1 : -1;
-            double x = side * trees.nextDouble(120, 330);
-            double z = trees.nextDouble(-320, 320);
-            String model = trees.nextBoolean() ? "fir_sapling" : "pine_sapling_small";
-            if (gentle(ground, x, z, 38)) {
-                props.add(new Prop(model, x, -0.3, z, trees.nextDouble(0, 2 * Math.PI), trees.nextDouble(6, 11),
-                    "tree"));
-            }
-        }
         // everything on the ground plan moved to the square's place in the world
         if (originX != 0 || originZ != 0) {
             buildings.replaceAll(b -> new Building(b.name(), b.spec(), b.x() + originX, b.z() + originZ, b.yaw(),
@@ -263,6 +251,22 @@ public final class VillageLayout {
     public Building building(String name) {
         for (Building b : buildings) {
             if (b.name().equals(name)) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /** The building whose walls stand round world ({@code x}, {@code z}), or null. */
+    public Building inside(double x, double z) {
+        for (Building b : buildings) {
+            double c = Maths.cos(b.yaw());
+            double s = Maths.sin(b.yaw());
+            double dx = x - b.x();
+            double dz = z - b.z();
+            double lx = dx * c - dz * s;
+            double lz = dx * s + dz * c;
+            if (Math.abs(lx) < b.spec().width() / 2 && Math.abs(lz) < b.spec().depth() / 2) {
                 return b;
             }
         }

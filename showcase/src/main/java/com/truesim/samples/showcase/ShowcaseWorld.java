@@ -10,6 +10,7 @@ import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.samples.showcase.assets.Surfaces;
 import com.truesim.samples.showcase.day.DayDriver;
 import com.truesim.samples.showcase.day.DayState;
+import com.truesim.samples.showcase.flora.Flora;
 import com.truesim.samples.showcase.fx.FxTextures;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
@@ -21,6 +22,7 @@ import com.truesim.samples.showcase.world.Village;
 import com.truesim.samples.showcase.world.VillageLayout;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.render.TextureData;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
@@ -45,6 +47,7 @@ public final class ShowcaseWorld implements AutoCloseable {
     private final Village village;
     private final DayDriver day;
     private final TerrainSite site;
+    private final Flora flora;
 
     /** Where the square lies in Lauterbrunnen's frame (x east, z south of the church), metres. */
     public static final double VILLAGE_X = -130;
@@ -63,12 +66,22 @@ public final class ShowcaseWorld implements AutoCloseable {
             FxTextures.SMOKE_NORMALS)) {
             assets.resources().hold(ref);
         }
+        // the valley's grass, trees, shrubs and flowers, where the ecology puts them
+        flora = new Flora(renderer, ground, layout, ground instanceof TerrainGround t ? t.surface() : null,
+            Path.of(graph.settings().get(ShowcaseSettings.PROCEDURAL)));
+        flora.hold();
         village.awaitModels(Duration.ofMinutes(3));
+        long deadline = System.nanoTime() + Duration.ofMinutes(5).toNanos();
+        while (!flora.ready() && System.nanoTime() < deadline) {
+            assets.drain();
+            Thread.sleep(10);
+        }
         day = new DayDriver(renderer, village, ground, layout, site != null);
     }
 
     /** The whole chain in {@code port}, seeing what {@code camera} sees. */
     public SceneView view(ViewPort port, Camera camera) {
+        flora.viewer(camera);
         return renderer.view(port, camera);
     }
 
@@ -80,12 +93,14 @@ public final class ShowcaseWorld implements AutoCloseable {
         village.update(camera.position(0), camera.position(1), camera.position(2), Maths.toRadians(60),
             viewportHeight);
         day.apply(state, camera, seconds);
+        flora.update(state, camera, seconds);
+        renderer.indoors(layout.inside(camera.position(0), camera.position(2)) != null);
         renderer.update(seconds, seconds * state.weatherRate, DayDriver.gameSeconds(state), camera);
     }
 
     /** Whether the streamed content about the camera and everything it asked of the GPU is there. */
     public boolean ready() {
-        return village.ready() && renderer.assets().resources().loaded();
+        return village.ready() && flora.ready() && renderer.assets().resources().loaded();
     }
 
     public ShowcaseRenderer renderer() {
@@ -123,6 +138,10 @@ public final class ShowcaseWorld implements AutoCloseable {
         return ground;
     }
 
+    public Flora flora() {
+        return flora;
+    }
+
     public Village village() {
         return village;
     }
@@ -134,6 +153,7 @@ public final class ShowcaseWorld implements AutoCloseable {
     @Override
     public void close() {
         village.close();
+        flora.close();
         renderer.close();
     }
 }

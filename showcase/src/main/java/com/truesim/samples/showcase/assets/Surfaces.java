@@ -23,7 +23,7 @@ public final class Surfaces {
 
     public static final Scan COBBLES = new Scan("cobblestone_floor_03", "4k", 2.4, 0.42f, 0.4f, 0.37f, 1);
     public static final Scan MEADOW = new Scan("sparse_grass", "4k", 2.0, 0.2f, 0.24f, 0.1f, 1);
-    /** The meadow's tint: late October's grass, olive rather than the scan's brown. */
+    /** The meadow's tint: late September's grass, olive rather than the scan's brown. */
     public static final float[] MEADOW_TINT = {0.82f, 1.15f, 1.0f};
     public static final Scan STONE_WALL = new Scan("old_stone_wall", "4k", 2.0, 0.42f, 0.38f, 0.33f, 1);
     public static final Scan PLASTER = new Scan("white_plaster_02", "4k", 3.0, 0.75f, 0.73f, 0.68f, 1);
@@ -40,9 +40,13 @@ public final class Surfaces {
     public static final Scan FLOORBOARDS = new Scan("plank_flooring_02", "2k", 2.0, 0.45f, 0.3f, 0.18f, 0.7f);
     public static final Scan GRANITE = new Scan("granite_wall", "2k", 2.0, 0.5f, 0.47f, 0.43f, 1);
     /** The terrain's layers: Lauterbrunnen's limestone cliffs, scree, the meadows, snow. */
-    public static final Scan LIMESTONE = new Scan("rock_boulder_dry", "2k", 6.0, 0.55f, 0.53f, 0.5f, 1);
+    public static final Scan LIMESTONE = new Scan("cliff_side", "2k", 12.0, 0.55f, 0.53f, 0.5f, 1);
     public static final Scan SCREE = new Scan("gray_rocks", "2k", 3.0, 0.4f, 0.4f, 0.38f, 1);
     public static final Scan SNOW = new Scan("snow_02", "2k", 4.0, 0.85f, 0.87f, 0.9f, 1);
+    /** Beams, balconies, shutters' frames: rough sawn wood. */
+    public static final Scan BEAMS = new Scan("rough_wood", "2k", 2.0, 0.3f, 0.22f, 0.15f, 1);
+    /** Window frames and doors: dark stained wood. */
+    public static final Scan DARK_WOOD = new Scan("dark_wood", "2k", 2.0, 0.2f, 0.1f, 0.06f, 0.8f);
 
     private final ShowcaseAssets assets;
 

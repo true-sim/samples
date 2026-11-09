@@ -26,6 +26,12 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 | [snow_02](https://polyhaven.com/a/snow_02) | Snow 02 | Rob Tuytel | texture | 2k |
 | [plank_flooring_02](https://polyhaven.com/a/plank_flooring_02) | Plank Flooring 02 | Dario Barresi, Dimitrios Savva | texture | 2k |
 | [granite_wall](https://polyhaven.com/a/granite_wall) | Granite Wall | Dimitrios Savva | texture | 2k |
+| [cliff_side](https://polyhaven.com/a/cliff_side) | Cliff Side | James Ray Cock, Jenelle van Heerden, Dario Barresi | texture | 2k |
+| [pine_bark](https://polyhaven.com/a/pine_bark) | Pine Bark | Dimitrios Savva | texture | 2k |
+| [bark_brown_02](https://polyhaven.com/a/bark_brown_02) | Bark Brown 02 | Rob Tuytel | texture | 2k |
+| [bark_willow](https://polyhaven.com/a/bark_willow) | Bark Willow | Dario Barresi, Dimitrios Savva | texture | 2k |
+| [rough_wood](https://polyhaven.com/a/rough_wood) | Rough Wood | Rob Tuytel | texture | 2k |
+| [dark_wood](https://polyhaven.com/a/dark_wood) | Dark Wood | Dario Barresi, Dimitrios Savva, Rico Cilliers | texture | 2k |
 | [street_lamp_01](https://polyhaven.com/a/street_lamp_01) | Street Lamp 01 | Josh Dean | model | 2k |
 | [street_lamp_02](https://polyhaven.com/a/street_lamp_02) | Street Lamp 02 | Josh Dean | model | 2k |
 | [outdoor_table_chair_set_01](https://polyhaven.com/a/outdoor_table_chair_set_01) | Outdoor Table Chair Set 01 | James Ray Cock | model | 2k |

@@ -107,6 +107,8 @@ public final class Village implements AutoCloseable {
     private final AssetRef<MaterialData> fenceWood;
     /** Glowing materials the day animates: lamps' bulbs, the rooms' bulbs. */
     public final AssetRef<MaterialData> lampGlow = Surfaces.glowing(1, 0.85f, 0.6f, 0.4f);
+    /** The street lamps' lantern glass: frosted, lit from within. */
+    public final AssetRef<MaterialData> lampGlass = Surfaces.glowing(0.9f, 0.85f, 0.75f, 0.25f);
     public final AssetRef<MaterialData> roomGlow = Surfaces.glowing(1, 0.8f, 0.55f, 0.45f);
     private final AssetRef<MaterialData> mirrorGlass = Surfaces.metal(0.95f, 0.95f, 0.95f, 0.02f);
     private final AssetRef<MaterialData> mirrorFrame = Surfaces.metal(0.8f, 0.6f, 0.3f, 0.35f);
@@ -131,19 +133,20 @@ public final class Village implements AutoCloseable {
             surfaces.scan(Surfaces.MOSSY_ROCK), Surfaces.plain(0.62f, 0.62f, 0.64f, 0.85f));
         AssetRef<MaterialData> stone = surfaces.scan(Surfaces.STONE_WALL);
         AssetRef<MaterialData> planks = surfaces.scan(Surfaces.PLANKS);
-        AssetRef<MaterialData> worn = surfaces.scan(Surfaces.WORN_WOOD);
-        AssetRef<MaterialData> interior = surfaces.scan(Surfaces.PAINTED_PLASTER, 0.95f, 0.9f, 0.82f);
+        AssetRef<MaterialData> worn = surfaces.scan(Surfaces.BEAMS);
+        // limewashed rooms, warm (Poly Haven's painted plaster is blue-green: the café read cold)
+        AssetRef<MaterialData> interior = surfaces.scan(Surfaces.PLASTER, 0.98f, 0.9f, 0.78f);
         AssetRef<MaterialData> glass = Surfaces.glass();
         AssetRef<MaterialData> hearth = surfaces.scan(Surfaces.GRANITE, 0.7f, 0.7f, 0.7f);
-        AssetRef<MaterialData> shutters = Surfaces.plain(0.08f, 0.2f, 0.11f, 0.6f);
+        AssetRef<MaterialData> shutters = surfaces.scan(Surfaces.BEAMS, 0.35f, 0.95f, 0.5f); // painted green
         buildingMaterials.put(Kind.CHALET, List.of(stone, planks, surfaces.scan(Surfaces.SLATES), worn, interior,
             surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth, shutters));
         chaletPlaster = List.of(stone, surfaces.scan(Surfaces.PLASTER, 0.97f, 0.93f, 0.85f),
             surfaces.scan(Surfaces.TILES), worn, interior, surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth,
-            Surfaces.plain(0.25f, 0.08f, 0.05f, 0.6f));
+            surfaces.scan(Surfaces.BEAMS, 1.1f, 0.45f, 0.35f)); // painted ox-blood
         buildingMaterials.put(Kind.CAFE, List.of(stone, surfaces.scan(Surfaces.PLASTER, 0.95f, 0.88f, 0.75f),
             surfaces.scan(Surfaces.TILES), worn, interior, surfaces.scan(Surfaces.PARQUET), glass, hearth,
-            Surfaces.plain(0.12f, 0.1f, 0.08f, 0.5f)));
+            surfaces.scan(Surfaces.DARK_WOOD)));
         buildingMaterials.put(Kind.CHURCH, List.of(surfaces.scan(Surfaces.GRANITE), surfaces.scan(Surfaces.PLASTER),
             surfaces.scan(Surfaces.DARK_SLATES), worn, Surfaces.plain(0.85f, 0.85f, 0.82f, 0.5f),
             surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth, Surfaces.metal(0.85f, 0.65f, 0.3f, 0.3f)));
@@ -170,10 +173,16 @@ public final class Village implements AutoCloseable {
         if (site != null) {
             // effects-terrain's tiles: its own layer of the same world, its own interest following the camera
             com.truesim.common.math.color.Color white = new com.truesim.common.math.color.Color(1, 1, 1, 1);
-            var rules = com.truesim.effects.terrain.material.TerrainParameters.DEFAULTS;
+            // Lauterbrunnen's walls are near vertical: rock (triplanar, Poly Haven's bedded cliff, greyed to the
+            // limestone's) from 28 degrees, so no face keeps a layer projected from above (its texels stretched down
+            // the cliff as streaks), and the projections parting sharply
+            var rules = com.truesim.effects.terrain.material.TerrainParameters.DEFAULTS.withRockSlopeStart(28)
+                .withRockSlopeEnd(37).withScreeSlopeStart(20).withScreeSlopeEnd(28).withTriplanarSharpness(12);
             if (assets.polyHaven()) {
-                rules = rules.withRockColor(white).withGrassColor(new com.truesim.common.math.color.Color(
-                    Surfaces.MEADOW_TINT[0], Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
+                // the scan's ochre turned to the limestone's grey
+                rules = rules.withRockColor(new com.truesim.common.math.color.Color(0.7f, 0.8f, 1.0f, 1))
+                    .withGrassColor(new com.truesim.common.math.color.Color(Surfaces.MEADOW_TINT[0],
+                        Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
                     .withSnowColor(white);
             }
             AssetRef<MaterialData> material = com.truesim.effects.terrain.TerrainMaterial.data(rules,
@@ -452,7 +461,16 @@ public final class Village implements AutoCloseable {
     private void lamp(VillageLayout.Lamp l, CellContent content) {
         long node = content.create();
         place(node, l.x(), ground.height(l.x(), l.z()), l.z(), l.yaw());
-        spawn(models.get("street_lamp_01"), content, node, 0, 0, 0, 0, 1);
+        long[] parts = spawn(models.get("street_lamp_01"), content, node, 0, 0, 0, 0, 1);
+        // the lantern's glass and bulb glow (its own materials are dark glass): Poly Haven's lamp has three, in its
+        // glTF's order body, glass, bulb; the day animates the glass and the bulb as the lamps' other bulbs
+        for (long n : parts) {
+            Renderable r = scene.components().get(n, Renderable.TYPE);
+            if (r != null && r.materials().size() == 3) {
+                scene.components().set(n, Renderable.TYPE, r.withMaterials(List.of(r.materials().get(0), lampGlass,
+                    lampGlow)));
+            }
+        }
         long light = content.create(node);
         scene.setTranslation(light, 0, 3.35, 0);
         scene.components().set(light, LightSource.TYPE, LightSource.point(1, 0.72f, 0.45f, 0).range(22));
@@ -496,11 +514,11 @@ public final class Village implements AutoCloseable {
     }
 
     /** Spawns {@code model} under a new node of {@code parent} at the local position, turn and scale. */
-    private void spawn(AssetRef<ModelData> model, CellContent content, long parent, double x, double y, double z,
+    private long[] spawn(AssetRef<ModelData> model, CellContent content, long parent, double x, double y, double z,
         double yaw, double scale) {
         ModelData data = model == null ? null : assets.cache().get(model);
         if (data == null) {
-            return; // without Poly Haven's cache (or failed to load): left out
+            return new long[0]; // without Poly Haven's cache (or failed to load): left out
         }
         long node = content.create(parent);
         place(node, x, y, z, yaw);
@@ -509,6 +527,7 @@ public final class Village implements AutoCloseable {
         for (long n : nodes) {
             content.adopt(n); // removed with the cell
         }
+        return nodes;
     }
 
     @Override

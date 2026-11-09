@@ -12,6 +12,8 @@ val effectsAtmosphereVersion = rootProject.extra["effectsAtmosphereVersion"] as 
 val effectsWeatherVersion = rootProject.extra["effectsWeatherVersion"] as String
 val effectsPostVersion = rootProject.extra["effectsPostVersion"] as String
 val effectsTerrainVersion = rootProject.extra["effectsTerrainVersion"] as String
+val effectsVegetationVersion = rootProject.extra["effectsVegetationVersion"] as String
+val commonProceduralVersion = rootProject.extra["commonProceduralVersion"] as String
 
 dependencies {
     implementation("com.truesim.engine:engine-scene:$engineVersion")
@@ -27,6 +29,9 @@ dependencies {
     implementation("com.truesim.effects:weather-render:$effectsWeatherVersion")
     implementation("com.truesim.effects:weather-snow:$effectsWeatherVersion")
     implementation("com.truesim.effects:effects-post:$effectsPostVersion")
+    implementation("com.truesim.effects:effects-vegetation:$effectsVegetationVersion") // GPU grass, plants in the wind
+    implementation("com.truesim.common:common-procedural-assets:$commonProceduralVersion") // trees, shrubs, flowers
+    implementation("com.truesim.common:common-procedural-ecology-terrain:$commonProceduralVersion") // which grow where
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17") // the engine's log (validation messages) on the console
 }
 
@@ -92,7 +97,7 @@ tasks.register<JavaExec>("tour") {
     mainClass = "com.truesim.samples.showcase.ShowcaseTour"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
-        "measure", "assets", "terrain")
+        "measure", "assets", "terrain", "procedural", "sunShadows")
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
@@ -101,7 +106,8 @@ tasks.register<JavaExec>("tour") {
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
-    val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain")
+    val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain",
+        "procedural", "sunShadows")
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
