@@ -21,15 +21,15 @@ public final class Surfaces {
     public record Scan(String asset, String resolution, double size, float r, float g, float b, float roughness) {
     }
 
-    public static final Scan COBBLES = new Scan("cobblestone_floor_03", "2k", 2.4, 0.42f, 0.4f, 0.37f, 1);
-    public static final Scan MEADOW = new Scan("sparse_grass", "2k", 2.0, 0.2f, 0.24f, 0.1f, 1);
+    public static final Scan COBBLES = new Scan("cobblestone_floor_03", "4k", 2.4, 0.42f, 0.4f, 0.37f, 1);
+    public static final Scan MEADOW = new Scan("sparse_grass", "4k", 2.0, 0.2f, 0.24f, 0.1f, 1);
     /** The meadow's tint: late September's grass, olive rather than the scan's brown. */
     public static final float[] MEADOW_TINT = {0.82f, 1.15f, 1.0f};
-    public static final Scan STONE_WALL = new Scan("old_stone_wall", "2k", 2.0, 0.42f, 0.38f, 0.33f, 1);
-    public static final Scan PLASTER = new Scan("white_plaster_02", "2k", 3.0, 0.75f, 0.73f, 0.68f, 1);
-    public static final Scan PLANKS = new Scan("weathered_planks", "2k", 2.0, 0.25f, 0.2f, 0.16f, 1);
-    public static final Scan SLATES = new Scan("roof_slates_02", "2k", 3.0, 0.3f, 0.3f, 0.3f, 1);
-    public static final Scan PARQUET = new Scan("herringbone_parquet", "2k", 3.4, 0.4f, 0.25f, 0.13f, 0.45f);
+    public static final Scan STONE_WALL = new Scan("old_stone_wall", "4k", 2.0, 0.42f, 0.38f, 0.33f, 1);
+    public static final Scan PLASTER = new Scan("white_plaster_02", "4k", 3.0, 0.75f, 0.73f, 0.68f, 1);
+    public static final Scan PLANKS = new Scan("weathered_planks", "4k", 2.0, 0.25f, 0.2f, 0.16f, 1);
+    public static final Scan SLATES = new Scan("roof_slates_02", "4k", 3.0, 0.3f, 0.3f, 0.3f, 1);
+    public static final Scan PARQUET = new Scan("herringbone_parquet", "4k", 3.4, 0.4f, 0.25f, 0.13f, 0.45f);
     public static final Scan PAINTED_PLASTER = new Scan("painted_plaster_wall", "2k", 2.0, 0.8f, 0.78f, 0.72f, 1);
     public static final Scan TILES = new Scan("roof_09", "2k", 4.0, 0.38f, 0.22f, 0.15f, 1);
     public static final Scan DARK_SLATES = new Scan("roof_slates_03", "2k", 3.0, 0.22f, 0.23f, 0.25f, 1);

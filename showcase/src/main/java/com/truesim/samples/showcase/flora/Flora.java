@@ -51,7 +51,8 @@ import java.util.Set;
  * leaves turning, larches still green.
  *
  * <p>Trees and shrubs stand on {@link #TREES} metres a side round the village, dwarf shrubs and herbs on
- * {@link #HERBS} a side, all of them always in the scene.
+ * {@link #HERBS} a side; trees and shrubs always in the scene (impostors far away), dwarf shrubs and herbs within
+ * {@link #HERB_RADIUS} of the viewer.
  */
 public final class Flora implements AutoCloseable {
 
@@ -73,6 +74,10 @@ public final class Flora implements AutoCloseable {
     private final GroundMap map;
     private final ProceduralAssets procedural;
     private final FloraMaterials materials;
+    /** effects-vegetation's impostors of the far trees and shrubs, baked on the GPU. */
+    private final com.truesim.effects.vegetation.ImpostorBaker baker;
+    /** Metres round the viewer dwarf shrubs and herbs stand in. */
+    private static final double HERB_RADIUS = 70;
     private final Map<PlantScatter, List<PlantPlacement.Plant>> placements = new IdentityHashMap<>();
     private final List<AssetRef<ModelData>> models = new ArrayList<>();
     private int plants;
@@ -80,6 +85,12 @@ public final class Flora implements AutoCloseable {
     private Map<Integer, AssetRef<ModelData>> rockModels = Map.of();
     private com.truesim.common.procedural.settlement.Clearing rockClearing;
     private boolean rocksPlaced;
+    private com.truesim.common.procedural.ecology.rocks.RockScatter.Tile scree;
+    private final List<AssetRef<ModelData>> stoneModels = new ArrayList<>();
+    private final List<AssetRef<ModelData>> patchModels = new ArrayList<>();
+    private double screeX;
+    private double screeZ;
+    private double screeNear;
     private int trees;
 
     /**
@@ -92,6 +103,8 @@ public final class Flora implements AutoCloseable {
         var assets = renderer.assets();
         this.procedural = procedural;
         materials = new FloraMaterials(assets, named, procedural);
+        procedural.detail(com.truesim.common.procedural.assets.ModelDetail.of(renderer.settings()));
+        baker = new com.truesim.effects.vegetation.ImpostorBaker(renderer.device());
         double ox = layout.originX();
         double oz = layout.originZ();
         var plan = layout.settlement().clearing();
@@ -103,7 +116,7 @@ public final class Flora implements AutoCloseable {
             MAP_TEXELS);
         grassGround.map(map);
         sync = new VegetationSync(renderer.scene(), assets.cache(), renderer.settings()).ground(grassGround)
-            .placer(PlantPlacer.instances(placements::get));
+            .placer(PlantPlacer.instances(placements::get)).impostors(baker);
         hooks = new VegetationHooks(renderer.device(), renderer.gpuScene()).ground(map);
         var scene = renderer.scene();
         // the meadows: grass over the map, late September's (green, a quarter of the blades' tips dry)
@@ -186,6 +199,61 @@ public final class Flora implements AutoCloseable {
         }
         rocksPlaced = true;
         System.out.printf("Rocks: %d of %d in %d variants%n", placed, rocks.count(), rockModels.size());
+        if (scree != null) {
+            int stones = 0;
+            int patches = 0;
+            var near = scree.stones();
+            var far = scree.patches();
+            for (int c = 0; c < scree.cells(); c++) {
+                double dx = scree.cellX(c) - screeX;
+                double dz = scree.cellZ(c) - screeZ;
+                if (dx * dx + dz * dz < screeNear * screeNear) {
+                    for (int i = scree.first(c); i < scree.end(c); i++) {
+                        stones += spawnRock(cache.get(stoneModels.get(near.variant(i))), near, i) ? 1 : 0;
+                    }
+                } else if (scree.cover(c) > 0) {
+                    patches += spawnRock(cache.get(patchModels.get(far.variant(c))), far, c) ? 1 : 0;
+                }
+            }
+            System.out.printf("Scree: %d stones, %d patches%n", stones, patches);
+        }
+    }
+
+    /**
+     * The talus' small stones (common-procedural's {@code RockScatter}) over {@code size} metres round (cx, cz): single
+     * stones within {@code near} metres of it, each cell's patch beyond; placed with the rocks.
+     */
+    public void scree(com.truesim.common.procedural.ecology.rocks.RockScatter scatter, double cx, double cz,
+        double size, double near, NamedMaterials named) {
+        var tile = scatter.region(snap(cx - size / 2, 1.1), snap(cz - size / 2, 1.1), size, size);
+        String limestone = named.name("rocks/limestone.mat", rockMaterial(renderer.assets()));
+        for (int v = 0; v < tile.stoneVariants().size(); v++) {
+            stoneModels.add(procedural.model(RockAssets.recipe(tile.stoneVariants().get(v), limestone, "")));
+        }
+        for (int v = 0; v < tile.patchVariants().size(); v++) {
+            patchModels.add(procedural.model(RockAssets.recipe(tile.patchVariants().get(v), limestone, "")));
+        }
+        models.addAll(stoneModels);
+        models.addAll(patchModels);
+        scree = tile;
+        screeX = cx;
+        screeZ = cz;
+        screeNear = near;
+    }
+
+    private boolean spawnRock(ModelData data, com.truesim.common.procedural.ecology.rocks.RockScatter.Placed placed,
+        int i) {
+        if (data == null || i >= placed.count()) {
+            return false;
+        }
+        var scene = renderer.scene();
+        long node = scene.create();
+        scene.setTranslation(node, placed.x(i), placed.y(i), placed.z(i));
+        scene.setRotation(node, placed.q(i, 0), placed.q(i, 1), placed.q(i, 2), placed.q(i, 3));
+        float s = placed.scale(i);
+        scene.setScale(node, s, s, s);
+        data.spawn(scene, node);
+        return true;
     }
 
     /** 0 within 100 m of the square, 1 from 130 m. */
@@ -224,10 +292,10 @@ public final class Flora implements AutoCloseable {
             // a cluster hierarchy (common-procedural 0.4: detail by distance)
             AssetRef<ModelData> model = procedural.model(recipe);
             boolean tree = s.layer() == Layer.CANOPY;
-            // every plant always in the scene: scatters following the viewer (a radius) made the vegetation's sync
-            // swap materials under instances still drawing them (true-sim/effects-vegetation#2)
+            boolean woody = tree || s.layer() == Layer.SHRUB;
+            // trees and shrubs always in the scene, impostors far away; dwarf shrubs and herbs round the viewer
             PlantScatter scatter = new PlantScatter(model, size / 2, size / 2, 4, 1, 1, 90, -1e4, 1e4,
-                e.getKey(), sway(recipe), 0);
+                e.getKey(), sway(recipe), woody ? 0 : HERB_RADIUS, woody);
             placements.put(scatter, e.getValue());
             long node = scene.create();
             scene.setTranslation(node, x0 + size / 2, 0, z0 + size / 2);
@@ -286,6 +354,11 @@ public final class Flora implements AutoCloseable {
 
     /** Whether every plant's model has loaded (or failed: the rest still stand). */
     public boolean ready() {
+        return modelsLoaded() && sync.waitingScatters() == 0; // placed: impostors baked
+    }
+
+    /** Whether every plant's and rock's model has loaded (or failed). */
+    public boolean modelsLoaded() {
         var cache = renderer.assets().cache();
         for (AssetRef<ModelData> m : models) {
             if (cache.get(m) == null && cache.failure(m) == null) {
@@ -310,6 +383,7 @@ public final class Flora implements AutoCloseable {
     @Override
     public void close() {
         sync.close();
+        baker.close();
         renderer.assets().resources().textures().remove(map.slot());
     }
 }

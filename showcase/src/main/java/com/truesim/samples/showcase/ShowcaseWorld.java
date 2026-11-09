@@ -26,6 +26,7 @@ import com.truesim.common.procedural.ecology.EcologyParameters;
 import com.truesim.common.procedural.ecology.EcologyTerrain;
 import com.truesim.common.procedural.ecology.rocks.RockField;
 import com.truesim.common.procedural.ecology.rocks.RockFieldParameters;
+import com.truesim.common.procedural.ecology.rocks.RockScatter;
 import com.truesim.common.procedural.ecology.terrain.TalusModifier;
 import com.truesim.common.procedural.ecology.terrain.TerrainEcology;
 import com.truesim.common.procedural.settlement.terrain.SettlementTerrain;
@@ -77,6 +78,7 @@ public final class ShowcaseWorld implements AutoCloseable {
     private final TerrainSite site;
     private final Flora flora;
     private final WaterScene water; // or null: the valley made from functions
+    private final WaterNetwork rivers; // or null
 
     /** Where the square lies in Lauterbrunnen's frame (x east, z south of the church), metres. */
     public static final double VILLAGE_X = -130;
@@ -110,20 +112,21 @@ public final class ShowcaseWorld implements AutoCloseable {
         // roughness, then the village's grading (its roads' and square's cut and fill, verges, gravel scatter); the
         // ground then gives the modified heights, so the buildings, the props and the grass stand on what is drawn
         TerrainModifiers modifiers = TerrainModifiers.NONE;
-        WaterNetwork rivers = null;
+        WaterNetwork network = null;
         if (ground instanceof TerrainGround t) {
             double ox = plan.square().x();
             double oz = plan.square().z();
             // the Weisse Lütschine, its streams and the Staubbach Fall from the terrain's flow, on the bare ground
             // (common-procedural-water); their beds and banks carved first, then the talus, then the roads
             var bare = t.surface();
-            rivers = WaterNetwork.build((x, z) -> bare.heightAt(x, z, 2), WaterRegion.around(ox, oz, 4000),
+            network = WaterNetwork.build((x, z) -> bare.heightAt(x, z, 2), WaterRegion.around(ox, oz, 4000),
                 WaterSettings.parameters(graph.settings()));
-            modifiers = TerrainModifiers.of(WaterTerrain.of(rivers)).with(new TalusModifier(rocks,
+            modifiers = TerrainModifiers.of(WaterTerrain.of(network)).with(new TalusModifier(rocks,
                 TalusModifier.Parameters.DEFAULTS, new TerrainModifier.Bounds(ox - 1500, oz - 1500, ox + 1500,
                 oz + 1500))).with(SettlementTerrain.of(plan));
             t.modify(modifiers);
         }
+        rivers = network;
         layout = new VillageLayout(plan, ground);
         System.out.printf("Village: %d buildings, %d roads, %d props, %d fences planned and built in %.1f s%n",
             layout.buildings().size(), plan.roads().size(), layout.props().size(), layout.fences().size(),
@@ -142,6 +145,14 @@ public final class ShowcaseWorld implements AutoCloseable {
         // the valley's grass, trees, shrubs and flowers, where the ecology puts them
         ProceduralAssets procedural = new ProceduralAssets(assets.paths(), new GenerationCache(cache)).install();
         flora = new Flora(renderer, ground, layout, placing, rocks, named, procedural);
+        if (rivers != null && !rivers.falls().isEmpty()) {
+            // the talus' small stones round the Staubbach's foot (the water's close-up): single stones near the
+            // camera's way, patches beyond
+            var tallest = rivers.tallest().path();
+            int last = tallest.x().length - 1;
+            flora.scree(new RockScatter(rocks, RockScatter.Parameters.DEFAULTS, (x, z) -> ground.height(x, z)),
+                tallest.x()[last], tallest.z()[last], 320, 60, named);
+        }
         // the water: its channels, falls, stones, spray and mist placed in the scene (effects-water)
         if (rivers != null) {
             WaterMaterials.register(assets.resources().materials());
@@ -168,7 +179,7 @@ public final class ShowcaseWorld implements AutoCloseable {
         flora.hold();
         village.awaitModels(Duration.ofMinutes(3));
         long deadline = System.nanoTime() + Duration.ofMinutes(5).toNanos();
-        while (!flora.ready() && System.nanoTime() < deadline) {
+        while (!flora.modelsLoaded() && System.nanoTime() < deadline) {
             assets.drain();
             Thread.sleep(10);
         }
@@ -238,7 +249,53 @@ public final class ShowcaseWorld implements AutoCloseable {
     /** The tour through this world: the village's shots along its main street, the café's through the inn's door. */
     public com.truesim.samples.showcase.tour.TourScript tour() {
         return new com.truesim.samples.showcase.tour.TourScript(ground, layout.originX(), layout.originZ(),
-            site != null, layout.streetSouth(), layout.innDoor()).clear((x, z) -> layout.near(x, z, 3.5) != null);
+            site != null, layout.streetSouth(), layout.innDoor()).clear((x, z) -> layout.near(x, z, 3.5) != null)
+            .water(riverBank(), fall());
+    }
+
+    /** A point of the Weisse Luetschine near the village, the way it flows and its half width; or null. */
+    private double[] riverBank() {
+        if (rivers == null) {
+            return null;
+        }
+        double ox = layout.originX();
+        double oz = layout.originZ();
+        double most = 0;
+        for (var c : rivers.channels()) {
+            for (int i = 0; i < c.count(); i++) {
+                most = Math.max(most, c.discharge(i));
+            }
+        }
+        double best = Double.MAX_VALUE;
+        double[] out = null;
+        for (var c : rivers.channels()) {
+            for (int i = 0; i + 1 < c.count(); i++) {
+                if (c.discharge(i) < 0.5 * most) {
+                    continue; // the river, not its brooks
+                }
+                double dx = c.x(i) - ox;
+                double dz = c.z(i) - oz;
+                double d = dx * dx + dz * dz;
+                if (d < best && layout.near(c.x(i), c.z(i), 25) == null) {
+                    double fx = c.x(i + 1) - c.x(i);
+                    double fz = c.z(i + 1) - c.z(i);
+                    double l = Math.max(Math.sqrt(fx * fx + fz * fz), 1e-6);
+                    best = d;
+                    out = new double[] {c.x(i), c.z(i), fx / l, fz / l, c.width(i) / 2};
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The tallest fall's foot and lip (x, y, z each); or null. */
+    private double[] fall() {
+        if (rivers == null || rivers.falls().isEmpty()) {
+            return null;
+        }
+        var p = rivers.tallest().path();
+        int last = p.x().length - 1;
+        return new double[] {p.x()[last], p.y()[last], p.z()[last], p.x()[0], p.y()[0], p.z()[0]};
     }
 
     public Flora flora() {

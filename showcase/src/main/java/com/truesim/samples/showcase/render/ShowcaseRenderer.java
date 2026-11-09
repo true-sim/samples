@@ -183,6 +183,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         assets.resources().materials().register(com.truesim.effects.terrain.material.TerrainType.TYPE);
         assets.resources().materials().register(com.truesim.effects.vegetation.materials.VegetationGrass.TYPE);
         assets.resources().materials().register(com.truesim.effects.vegetation.materials.VegetationPlant.TYPE);
+        assets.resources().materials().register(com.truesim.effects.vegetation.materials.VegetationImpostor.TYPE);
         renderer = own(new MeshletRenderer(device, gpu, COLOR, DEPTH, slots));
         geometry = SceneGeometry.meshlets(renderer);
         lights = own(new Lights(device, 512, 32, slots));
@@ -213,7 +214,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         cloudLighting = new AtmosphereLighting(atmosphere);
         bolts = own(new LightningBolts(device, slots, weatherGpu, 3, 400));
         flashes = new LightningLights(scene, com.truesim.scene.core.NodeHandle.NONE, 4, 30_000);
-        particles = own(new Particles(device, slots, 160L << 20, 2048)).assets(assets.resources())
+        particles = own(new Particles(device, slots, 256L << 20, 2048)).assets(assets.resources())
             .modules(ShowcaseParticleModules.MODULES);
         particles.heights(ground, 256, 1024);
         if (rays != null) {
