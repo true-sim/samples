@@ -51,8 +51,8 @@ import java.util.Set;
  * generated for the showcase's day, late September ({@link #DAY}): rowan berries scarlet, apples ripe, the first
  * leaves turning, larches still green.
  *
- * <p>Trees stand on {@link #TREES} metres a side round the village, always in the scene; shrubs, dwarf shrubs and
- * herbs on {@link #HERBS} a side, each within {@link #HERB_RADIUS} of the viewer. Without the terrain (the valley made
+ * <p>Trees and shrubs stand on {@link #TREES} metres a side round the village, dwarf shrubs and herbs on
+ * {@link #HERBS} a side, all of them always in the scene. Without the terrain (the valley made
  * from functions) a spruce forest stands on the slopes by the scatter's own rules.
  */
 public final class Flora implements AutoCloseable {
@@ -63,8 +63,6 @@ public final class Flora implements AutoCloseable {
     public static final double TREES = 2048;
     /** Of the shrubs' and herbs'. */
     public static final double HERBS = 512;
-    /** Metres from the viewer within which herbs and dwarf shrubs are in the scene. */
-    public static final double HERB_RADIUS = 70;
     /** Variants of each species. */
     private static final int VARIANTS = 3;
     /** Metres a side of the grass's ground map, and its texels. */
@@ -163,11 +161,10 @@ public final class Flora implements AutoCloseable {
             Recipe recipe = recipe(s.id(), e.getKey() % VARIANTS);
             AssetRef<ModelData> model = flora.model(recipe, recipe.seed());
             boolean tree = s.layer() == Layer.CANOPY;
-            // trees and shrubs always in the scene (shrubs following the viewer over the whole forest made the
-            // vegetation's sync swap materials under instances still drawing them: see the report)
-            boolean always = tree || s.layer() == Layer.SHRUB;
+            // every plant always in the scene: scatters following the viewer (a radius) made the vegetation's sync
+            // swap materials under instances still drawing them (true-sim/effects-vegetation#2)
             PlantScatter scatter = new PlantScatter(model, size / 2, size / 2, 4, 1, 1, 90, -1e4, 1e4,
-                e.getKey(), sway(recipe), always ? 0 : HERB_RADIUS);
+                e.getKey(), sway(recipe), 0);
             placements.put(scatter, e.getValue());
             long node = scene.create();
             scene.setTranslation(node, x0 + size / 2, 0, z0 + size / 2);

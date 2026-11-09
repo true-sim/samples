@@ -161,20 +161,24 @@ effect of the engine and its libraries on at once, in physical units from noon t
   60 Hz simulated, every second one written (30 fps; `ffmpeg -framerate 30 -i f_%05d.png ...` by hand);
   `-Pmeasure=true` without `-Pout` reports each segment's frame times instead.
 - **What it costs** (`-Pmeasure=true`; RX 9070 XT, Ryzen 9 9950X3D, 2026-11-09, quality high, probe GI, forward
-  shading, the Lauterbrunnen terrain; the tour at 60 Hz simulated, two frames in flight, nothing presented; ms, mean
+  shading, the Lauterbrunnen terrain and its vegetation; the tour at 60 Hz simulated, two frames in flight, nothing presented; ms, mean
   and 99th percentile of each segment after its first second; GPU from the first pass to the last). The frames are
   GPU-bound: the main thread's time is mostly waiting for a frame slot.
 
   | Segment | 1920 x 1080 GPU | wall | 3840 x 2160 GPU | wall |
   |---|---|---|---|---|
-  | dawn (mist, low sun, alpenglow) | 17.8 / 39.3 | 21.4 / 39.7 | 36.5 / 42.8 | 40.1 / 43.6 |
-  | noon (cumulus, Jungfrau, square, café) | 17.0 / 20.2 | 19.7 / 24.1 | 34.6 / 39.7 | 37.4 / 40.2 |
-  | storm (nimbostratus, rain, lightning) | 15.7 / 19.3 | 19.1 / 19.6 | 33.6 / 38.3 | 37.0 / 38.6 |
-  | dusk (snowfall, lamps, fires) | 19.6 / 20.9 | 21.2 / 21.2 | 39.0 / 42.5 | 40.7 / 42.9 |
-  | night (stars, moon, fireworks) | 44.5 / 97.7 | 46.2 / 98.0 | 93.7 / 237.0 | 95.5 / 237.7 |
+  | dawn (mist, low sun, alpenglow) | 90.6 / 114.8 | 93.8 / 115.3 | 146.0 / 188.8 | 149.6 / 189.8 |
+  | noon (cumulus, Jungfrau, square, café) | 89.7 / 105.4 | 92.2 / 105.7 | 123.4 / 158.9 | 126.2 / 159.2 |
+  | storm (nimbostratus, rain, lightning) | 76.8 / 102.6 | 79.9 / 103.0 | 124.7 / 164.0 | 128.0 / 164.6 |
+  | dusk (snowfall, lamps, fires) | 81.3 / 103.1 | 82.8 / 103.4 | 119.5 / 149.0 | 121.2 / 149.9 |
+  | night (stars, moon, fireworks) | 103.5 / 240.4 | 105.1 / 243.9 | 194.3 / 476.1 | 196.0 / 478.0 |
 
-  Each segment's first frames after a cut stall up to 3.2 s (pipelines made as new effects first show). The night's
-  fireworks are the heaviest: hundreds of burst lights and their smoke lit per vertex.
+  The vegetation dominates since it came in (the frames took 16 to 20 ms at 1080p without it): some 32,000 trees
+  and as many shrubs, dwarf shrubs and flowers, all always in the scene (scatters following the viewer hit
+  true-sim/effects-vegetation#2), the trees cluster hierarchies from the generator's level 1 without impostors for
+  the far forest (true-sim/common-procedural#11), and the GPU grass. Each segment's first frames after a cut stall up
+  to 3.2 s (pipelines made as new effects first show). The night's fireworks are the heaviest effect: hundreds of
+  burst lights and their smoke lit per vertex.
 
 ## Benchmarks
 
