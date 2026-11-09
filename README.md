@@ -159,7 +159,9 @@ effect of the engine and its libraries on at once, in physical units from noon t
   tour (`TourScript`: dawn, noon, storm, dusk, night; spline cameras low through the meadow, into the square,
   through the café's door to its mirror, up the Staubbach cliff, towards the Jungfrau, the fireworks) as PNG frames at
   60 Hz simulated, every second one written (30 fps; `ffmpeg -framerate 30 -i f_%05d.png ...` by hand);
-  `-Pmeasure=true` without `-Pout` reports each segment's frame times instead.
+  `-Pmeasure=true` without `-Pout` reports each segment's frame times instead. The tour runs without global
+  illumination unless `-Pgi=probes` (or `cascades`) asks for it; the interactive app has the probes by default.
+  `-Pskip=fog,aerial,...` leaves passes out (environment, ao, ssr, gi, aerial, fog, clouds) to see what each does.
 - **What it costs** (`-Pmeasure=true`; RX 9070 XT, Ryzen 9 9950X3D, 2026-11-09, quality high, probe GI, forward
   shading, the Lauterbrunnen terrain and its vegetation; the tour at 60 Hz simulated, two frames in flight, nothing presented; ms, mean
   and 99th percentile of each segment after its first second; GPU from the first pass to the last). The frames are

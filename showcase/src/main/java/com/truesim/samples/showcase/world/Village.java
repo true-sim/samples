@@ -488,20 +488,11 @@ public final class Village implements AutoCloseable {
     }
 
     private void fence(VillageLayout.Fence f, CellContent content) {
-        double dx = f.x1() - f.x0();
-        double dz = f.z1() - f.z0();
-        double length = Math.sqrt(dx * dx + dz * dz);
-        double yaw = Maths.atan2(-dz, dx); // local +x along the fence
-        int sections = (int) Math.ceil(length / 12);
-        for (int i = 0; i < sections; i++) {
-            double t = (double) i / sections;
-            double x = f.x0() + dx * t;
-            double z = f.z0() + dz * t;
-            long node = content.create();
-            place(node, x, ground.height(x, z), z, yaw);
-            scene.components().set(node, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Fence(
-                length / sections, 2.4)), List.of(fenceWood)));
-        }
+        // one node, the mesh draped on the ground: every post on the ground under it, the rails sloping between
+        long node = content.create();
+        scene.setTranslation(node, f.x0(), 0, f.z0());
+        scene.components().set(node, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Fence(f.x0(), f.z0(),
+            f.x1(), f.z1(), 2.4)), List.of(fenceWood)));
     }
 
     private void prop(Prop p, CellContent content) {

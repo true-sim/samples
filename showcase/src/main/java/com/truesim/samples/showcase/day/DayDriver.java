@@ -233,9 +233,9 @@ public final class DayDriver {
         renderer.lights().shadow(renderer.moonLight(), sunUp ? ShadowSpec.NONE : moonShadow());
         // depth of field for this shot
         settings.set(DepthOfField.F_STOP, (float) state.fStop);
-        // AgX's look: punchy by day; the base look once the sun is low (the alpenglow and the twilight are saturated
-        // enough of themselves: punchy turned them into a red smear) and under the storm
-        DisplayTransform.Look look = state.hour > 18.5 || state.storm ? DisplayTransform.Look.BASE
+        // AgX's look: punchy by day; the base look while the sun is low, morning and evening (the alpenglow and the
+        // twilight are saturated enough of themselves: punchy turned them into a red smear) and under the storm
+        DisplayTransform.Look look = state.hour < 9 || state.hour > 18.5 || state.storm ? DisplayTransform.Look.BASE
             : DisplayTransform.Look.PUNCHY;
         if (look != this.look) {
             settings.set(DisplayTransform.AGX.setting("look"), look);

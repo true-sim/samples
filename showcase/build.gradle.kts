@@ -96,8 +96,10 @@ tasks.register<JavaExec>("tour") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass = "com.truesim.samples.showcase.ShowcaseTour"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
+    // the film is made without global illumination (-Pgi=probes or cascades to have it): the interactive app has it
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
-        "measure", "assets", "terrain", "procedural", "sunShadows", "skip")
+        "measure", "assets", "terrain", "procedural", "sunShadows", "skip") +
+        (if (providers.gradleProperty("gi").isPresent) listOf() else listOf("--set", "showcase.gi=off"))
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 

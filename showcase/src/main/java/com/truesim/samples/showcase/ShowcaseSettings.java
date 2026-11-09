@@ -29,9 +29,12 @@ public final class ShowcaseSettings {
      */
     public static final Setting<String> SUN_SHADOWS = Setting.text("showcase.sunShadows", "cascades",
         "the sun's shadows: cascades or rayTraced");
-    /** Passes left out, to see what each does: environment, ao, ssr, gi, aerial, fog, clouds (comma separated). */
+    /**
+     * Passes left out, to see what each does: environment, ao, ssr, gi, aerial, fog, clouds; and plants (the trees,
+     * shrubs and flowers: a lighter scene for GPU-assisted validation). Comma separated.
+     */
     public static final Setting<String> SKIP = Setting.text("showcase.skip", "",
-        "passes left out (debugging): environment, ao, ssr, gi, aerial, fog, clouds");
+        "left out (debugging): environment, ao, ssr, gi, aerial, fog, clouds, plants");
     /** Where common-procedural keeps the trees and flowers it generated (made once, read on later runs). */
     public static final Setting<String> PROCEDURAL = Setting.text("showcase.procedural",
         System.getProperty("user.home") + "/.truesim/procedural",

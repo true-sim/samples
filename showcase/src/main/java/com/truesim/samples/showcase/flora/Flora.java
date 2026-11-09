@@ -26,6 +26,7 @@ import com.truesim.effects.vegetation.scene.PlantScatter;
 import com.truesim.effects.vegetation.scene.VegetationAssets;
 import com.truesim.effects.vegetation.scene.VegetationSync;
 import com.truesim.engine.render.Camera;
+import com.truesim.samples.showcase.ShowcaseSettings;
 import com.truesim.samples.showcase.day.DayState;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
@@ -110,7 +111,9 @@ public final class Flora implements AutoCloseable {
             .set("height", 0.4f).set("width", 0.018f).build().values();
         scene.components().set(field, GrassField.TYPE, new GrassField(MAP / 2 - 2, MAP / 2 - 2, grass, 0.4f, true));
         long start = System.nanoTime();
-        if (surface != null) {
+        if (java.util.List.of(renderer.settings().get(ShowcaseSettings.SKIP).split(",")).contains("plants")) {
+            System.out.println("Flora: the grass only (showcase.skip=plants)");
+        } else if (surface != null) {
             ecology(surface, new Clearing(ground, layout, 7).core(115), new Clearing(ground, layout, 2), ox, oz);
         } else {
             forest(ground, ox, oz);

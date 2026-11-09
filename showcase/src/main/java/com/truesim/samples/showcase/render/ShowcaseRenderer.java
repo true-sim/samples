@@ -309,7 +309,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         if (!skip.contains("ssr")) {
             port.add(new ScreenSpaceReflections(view));
         }
-        if (rays != null && !skip.contains("gi")) {
+        if (rays != null && !skip.contains("gi") && !"off".equals(settings.get(ShowcaseSettings.GI))) {
             if (volume == null) {
                 volume = new ProbeVolume(rays, renderer, lights, environment, view);
             }
