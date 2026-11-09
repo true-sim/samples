@@ -97,7 +97,7 @@ public final class ShowcaseTour {
                             step(world, rig, state, eye, height);
                             graph.beginFrame();
                             graph.submit(0, 0);
-                            if (world.ready() || System.nanoTime() - started > 120_000_000_000L) {
+                            if (world.ready() || System.nanoTime() - started > 400_000_000_000L) { // a cold start loads the forest
                                 settled++;
                             } else {
                                 waited++;

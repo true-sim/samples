@@ -197,14 +197,13 @@ public final class DayDriver {
         // units, the units the pre-exposure's), played from when its display component is set
         settings.set(FireworksSettings.LUMINANCE_SCALE, (float) units);
         if (!smokeTuned) {
-            // the shells' smoke as puffs of a volume: thinner and spreading wider, scattering forwards so the bursts
-            // behind light it up, lingering as it drifts off in the breeze (a change makes the shells anew: once)
-            settings.set(FireworksSettings.SMOKE_EXTINCTION, 1.6f);
-            settings.set(FireworksSettings.SMOKE_PUFF, 1.6f);
-            settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 1.4f);
+            // the shells' smoke spreading a little faster, scattering forwards so the bursts behind light it up,
+            // lingering as it drifts off in the breeze (thinner, wider puffs stood as dark blobs against the glow;
+            // a change makes the shells anew: once)
+            settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 1.0f);
             settings.set(FireworksSettings.SMOKE_PHASE, 0.75f);
             settings.set(FireworksSettings.SMOKE_ALBEDO, 0.95f);
-            settings.set(FireworksSettings.SMOKE_TIME, 45f);
+            settings.set(FireworksSettings.SMOKE_TIME, 40f);
             smokeTuned = true;
         }
         if (state.fireworks != showing) {

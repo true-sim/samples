@@ -141,6 +141,8 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private final List<AutoCloseable> owned = new ArrayList<>();
     private final List<SimpleSnow> snows = new ArrayList<>();
     private final List<com.truesim.effects.water.WaterFlow> flows = new ArrayList<>();
+    private com.truesim.engine.vulkan.GpuBuffer wetness;
+    private com.truesim.effects.water.WaterSway sway;
     private final List<AtmosphereFog> fogs = new ArrayList<>();
     private final ScreenFlash flash = new ScreenFlash();
     private ProbeVolume volume;
@@ -211,7 +213,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         cloudLighting = new AtmosphereLighting(atmosphere);
         bolts = own(new LightningBolts(device, slots, weatherGpu, 3, 400));
         flashes = new LightningLights(scene, com.truesim.scene.core.NodeHandle.NONE, 4, 30_000);
-        particles = own(new Particles(device, slots, 256L << 20, 2048)).assets(assets.resources())
+        particles = own(new Particles(device, slots, 160L << 20, 2048)).assets(assets.resources())
             .modules(ShowcaseParticleModules.MODULES);
         particles.heights(ground, 256, 1024);
         if (rays != null) {
@@ -297,6 +299,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // the falls' mist a third as dense: at the network's own density the Staubbach's foot stood as a white
         // ellipsoid in the valley's view from above the trees
         settings.set(game, com.truesim.effects.water.WaterRenderSettings.MIST_DENSITY, 0.35f);
+        // screen-space reflections on the transparent surfaces too: the river reflects the cliffs, trees and houses,
+        // the windows the street (engine 0.201)
+        settings.set(game, com.truesim.engine.render.ScreenSpaceReflections.TRANSPARENT, true);
     }
 
     /**
@@ -335,6 +340,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         port.add(new ParticleDraw(particles, view));
         // the water's flow (effects-water's hook), its clock kept each frame
         com.truesim.effects.water.WaterFlow flow = new com.truesim.effects.water.WaterFlow(view);
+        if (wetness != null) {
+            flow.wetness(wetness); // the ground the water wets: banks, spray's reach
+        }
         flows.add(flow);
         port.add(flow);
         if (snows.isEmpty()) { // the sky's capture once, from the first view
@@ -420,6 +428,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         for (int i = 0; i < flows.size(); i++) {
             flows.get(i).advance(frameSeconds);
         }
+        if (sway != null) {
+            sway.update(frameSeconds, settings); // the falls' sheets and jets swaying
+        }
         particles.heightFocus(x, z);
         effectSync.clearViewers();
         effectSync.addViewer(x, y, z);
@@ -427,6 +438,15 @@ public final class ShowcaseRenderer implements AutoCloseable {
         lightSync.update();
         sync.update();
         overrides.update();
+    }
+
+    /**
+     * The water's ground wetness map (effects-water's {@code WaterWetness}, closed with the renderer) for the views
+     * made from now on, and the falls' sway.
+     */
+    public void water(com.truesim.engine.vulkan.GpuBuffer wet) {
+        wetness = own(wet);
+        sway = new com.truesim.effects.water.WaterSway(gpu);
     }
 
     /** Whether the camera is in a building (the sky's uniform light held back). */

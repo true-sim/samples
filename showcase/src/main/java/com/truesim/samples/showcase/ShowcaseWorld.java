@@ -16,6 +16,7 @@ import com.truesim.common.procedural.water.WaterSettings;
 import com.truesim.effects.water.WaterMaterials;
 import com.truesim.effects.water.WaterScene;
 import com.truesim.effects.water.WaterTerrain;
+import com.truesim.effects.water.WaterWetness;
 import com.truesim.effects.water.materials.FallingWaterParameters;
 import com.truesim.effects.water.materials.FlowingWaterParameters;
 import com.truesim.common.procedural.ecology.AlpineSpecies;
@@ -139,12 +140,22 @@ public final class ShowcaseWorld implements AutoCloseable {
         // the water: its channels, falls, stones, spray and mist placed in the scene (effects-water)
         if (rivers != null) {
             WaterMaterials.register(assets.resources().materials());
-            water = new WaterScene(renderer.scene(), new WaterAssets(assets.paths()), rivers, WaterScene.Look.of(
-                WaterMaterials.river(FlowingWaterParameters.DEFAULTS).ref(),
+            WaterScene.Look look = WaterScene.Look.of(WaterMaterials.river(FlowingWaterParameters.DEFAULTS).ref(),
                 WaterMaterials.sheet(FallingWaterParameters.DEFAULTS).ref(),
-                WaterMaterials.jets(FallingWaterParameters.DEFAULTS).ref(),
-                surfaces.scan(Surfaces.LIMESTONE))).stones(procedural).effects(renderer.effects())
-                .place(graph.settings());
+                WaterMaterials.jets(FallingWaterParameters.DEFAULTS).ref(), surfaces.scan(Surfaces.LIMESTONE));
+            // the materials loaded first: the falls displace, so theirs must be there before their nodes
+            for (var m : List.of(look.river(), look.sheet(), look.jets())) {
+                assets.cache().acquire(m);
+            }
+            long until = System.nanoTime() + Duration.ofMinutes(1).toNanos();
+            while (System.nanoTime() < until && List.of(look.river(), look.sheet(), look.jets()).stream()
+                .anyMatch(m -> assets.cache().get(m) == null && assets.cache().failure(m) == null)) {
+                assets.drain();
+                Thread.sleep(5);
+            }
+            water = new WaterScene(renderer.scene(), new WaterAssets(assets.paths()), rivers, look)
+                .stones(procedural).effects(renderer.effects()).place(graph.settings());
+            renderer.water(WaterWetness.of(rivers, graph.settings()).upload(device));
             System.out.printf("Water: %d nodes, %d sprays%n", water.nodes().size(), water.sprays().size());
         } else {
             water = null;
