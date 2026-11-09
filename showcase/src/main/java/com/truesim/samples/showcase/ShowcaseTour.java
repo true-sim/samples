@@ -59,7 +59,9 @@ public final class ShowcaseTour {
         }
         boolean validation = "true".equals(System.getenv("TRUESIM_GPU_ASSISTED_VALIDATION"))
             || "true".equals(System.getenv("TRUESIM_VALIDATION"));
-        VulkanInstance.Builder builder = VulkanInstance.builder().applicationName("showcase tour").surfaces(false);
+        // validation (and GPU-assisted validation, TRUESIM_GPU_ASSISTED_VALIDATION=true) when the environment asks
+        VulkanInstance.Builder builder = VulkanInstance.builder().applicationName("showcase tour").surfaces(false)
+            .validation(validation);
         try (VulkanInstance instance = builder.build();
              VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
              FrameGraph graph = new FrameGraph(device, 2).timings(measure)) {
@@ -156,6 +158,11 @@ public final class ShowcaseTour {
                         }
                         tourTime += segment.duration();
                     }
+                }
+                if (validation) {
+                    device.waitIdle();
+                    System.out.printf(Locale.ROOT, "Validation: %d errors, %d warnings%n", instance.validationErrors(),
+                        instance.validationWarnings());
                 }
                 if (measure) {
                     System.out.printf(Locale.ROOT, "Frame times at %d x %d (%s), ms: mean, 99th percentile, worst%n",

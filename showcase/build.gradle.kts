@@ -27,6 +27,7 @@ dependencies {
     implementation("com.truesim.effects:weather-render:$effectsWeatherVersion")
     implementation("com.truesim.effects:weather-snow:$effectsWeatherVersion")
     implementation("com.truesim.effects:effects-post:$effectsPostVersion")
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.17") // the engine's log (validation messages) on the console
 }
 
 // Every library's shading hooks (aerial perspective, fog, snow, the probe volume) in one listing: the libraries know
