@@ -168,7 +168,11 @@ public final class ShowcaseRenderer implements AutoCloseable {
         presets(settings, quality);
         // global illumination: the probe volume (the default) or radiance cascades, or none
         settings.set(EngineSettings.Layer.GAME, ProbeVolumeLighting.SLOT.setting(), settings.get(ShowcaseSettings.GI));
-        rays = device.rayTracing() ? own(new RayTracing(device, assets.resources().pool(), 1 << 18)) : null;
+        // ray tracing (bottom levels of every mesh: the forest's, the rocks', the village's) only where something
+        // traces: the global illumination or the sun's traced shadows; without them the GPU's memory goes to the scene
+        boolean traced = !"off".equals(settings.get(ShowcaseSettings.GI))
+            || "rayTraced".equals(settings.get(ShowcaseSettings.SUN_SHADOWS));
+        rays = device.rayTracing() && traced ? own(new RayTracing(device, assets.resources().pool(), 1 << 18)) : null;
         if (rays != null) {
             assets.rayTracing(rays);
         }
@@ -290,6 +294,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // looks across them), the blades widening more as they thin
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.LOD_DISTANCE, 12f);
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.MAX_WIDEN, 4f);
+        // the falls' mist a third as dense: at the network's own density the Staubbach's foot stood as a white
+        // ellipsoid in the valley's view from above the trees
+        settings.set(game, com.truesim.effects.water.WaterRenderSettings.MIST_DENSITY, 0.35f);
     }
 
     /**
