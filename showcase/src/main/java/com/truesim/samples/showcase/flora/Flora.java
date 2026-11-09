@@ -1,7 +1,6 @@
 package com.truesim.samples.showcase.flora;
 
 import com.truesim.common.math.Vec3;
-import com.truesim.common.procedural.assets.GenerationCache;
 import com.truesim.common.procedural.assets.ProceduralAssets;
 import com.truesim.common.procedural.assets.Recipe;
 import com.truesim.common.procedural.ecology.Ecology;
@@ -34,7 +33,6 @@ import com.truesim.samples.showcase.world.VillageLayout;
 import com.truesim.scene.render.MaterialData;
 import com.truesim.scene.render.ModelData;
 import com.truesim.scene.assets.AssetRef;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -86,13 +84,13 @@ public final class Flora implements AutoCloseable {
 
     /**
      * The vegetation of {@code layout}'s village on {@code ground} as {@code ecology} has it grow, off what the
-     * village's plan clears; generated meshes cached in {@code cache}, materials named through {@code named}.
+     * village's plan clears; generated through {@code procedural}, materials named through {@code named}.
      */
     public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology, RockField rocks,
-        NamedMaterials named, Path cache) {
+        NamedMaterials named, ProceduralAssets procedural) {
         this.renderer = renderer;
         var assets = renderer.assets();
-        procedural = new ProceduralAssets(assets.paths(), new GenerationCache(cache)).install();
+        this.procedural = procedural;
         materials = new FloraMaterials(assets, named, procedural);
         double ox = layout.originX();
         double oz = layout.originZ();

@@ -6,7 +6,18 @@ import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
 import com.truesim.engine.render.SceneView;
 import com.truesim.engine.vulkan.VulkanDevice;
+import com.truesim.common.procedural.assets.GenerationCache;
+import com.truesim.common.procedural.assets.ProceduralAssets;
 import com.truesim.common.procedural.assets.SettlementSettings;
+import com.truesim.common.procedural.assets.WaterAssets;
+import com.truesim.common.procedural.water.WaterNetwork;
+import com.truesim.common.procedural.water.WaterRegion;
+import com.truesim.common.procedural.water.WaterSettings;
+import com.truesim.effects.water.WaterMaterials;
+import com.truesim.effects.water.WaterScene;
+import com.truesim.effects.water.WaterTerrain;
+import com.truesim.effects.water.materials.FallingWaterParameters;
+import com.truesim.effects.water.materials.FlowingWaterParameters;
 import com.truesim.common.procedural.ecology.AlpineSpecies;
 import com.truesim.common.procedural.ecology.Ecology;
 import com.truesim.common.procedural.ecology.EcologyParameters;
@@ -63,6 +74,7 @@ public final class ShowcaseWorld implements AutoCloseable {
     private final DayDriver day;
     private final TerrainSite site;
     private final Flora flora;
+    private final WaterScene water; // or null: the valley made from functions
 
     /** Where the square lies in Lauterbrunnen's frame (x east, z south of the church), metres. */
     public static final double VILLAGE_X = -130;
@@ -92,12 +104,18 @@ public final class ShowcaseWorld implements AutoCloseable {
         // roughness, then the village's grading (its roads' and square's cut and fill, verges, gravel scatter); the
         // ground then gives the modified heights, so the buildings, the props and the grass stand on what is drawn
         TerrainModifiers modifiers = TerrainModifiers.NONE;
+        WaterNetwork rivers = null;
         if (ground instanceof TerrainGround t) {
             double ox = plan.square().x();
             double oz = plan.square().z();
-            modifiers = TerrainModifiers.of(new TalusModifier(rocks, TalusModifier.Parameters.DEFAULTS,
-                new TerrainModifier.Bounds(ox - 1500, oz - 1500, ox + 1500, oz + 1500)))
-                .with(SettlementTerrain.of(plan));
+            // the Weisse Lütschine, its streams and the Staubbach Fall from the terrain's flow, on the bare ground
+            // (common-procedural-water); their beds and banks carved first, then the talus, then the roads
+            var bare = t.surface();
+            rivers = WaterNetwork.build((x, z) -> bare.heightAt(x, z, 2), WaterRegion.around(ox, oz, 4000),
+                WaterSettings.parameters(graph.settings()));
+            modifiers = TerrainModifiers.of(WaterTerrain.of(rivers)).with(new TalusModifier(rocks,
+                TalusModifier.Parameters.DEFAULTS, new TerrainModifier.Bounds(ox - 1500, oz - 1500, ox + 1500,
+                oz + 1500))).with(SettlementTerrain.of(plan));
             t.modify(modifiers);
         }
         layout = new VillageLayout(plan, ground);
@@ -116,7 +134,21 @@ public final class ShowcaseWorld implements AutoCloseable {
             assets.resources().hold(ref);
         }
         // the valley's grass, trees, shrubs and flowers, where the ecology puts them
-        flora = new Flora(renderer, ground, layout, placing, rocks, named, cache);
+        ProceduralAssets procedural = new ProceduralAssets(assets.paths(), new GenerationCache(cache)).install();
+        flora = new Flora(renderer, ground, layout, placing, rocks, named, procedural);
+        // the water: its channels, falls, stones, spray and mist placed in the scene (effects-water)
+        if (rivers != null) {
+            WaterMaterials.register(assets.resources().materials());
+            water = new WaterScene(renderer.scene(), new WaterAssets(assets.paths()), rivers, WaterScene.Look.of(
+                WaterMaterials.river(FlowingWaterParameters.DEFAULTS).ref(),
+                WaterMaterials.sheet(FallingWaterParameters.DEFAULTS).ref(),
+                WaterMaterials.jets(FallingWaterParameters.DEFAULTS).ref(),
+                surfaces.scan(Surfaces.LIMESTONE))).stones(procedural).effects(renderer.effects())
+                .place(graph.settings());
+            System.out.printf("Water: %d nodes, %d sprays%n", water.nodes().size(), water.sprays().size());
+        } else {
+            water = null;
+        }
         flora.hold();
         village.awaitModels(Duration.ofMinutes(3));
         long deadline = System.nanoTime() + Duration.ofMinutes(5).toNanos();
@@ -209,6 +241,9 @@ public final class ShowcaseWorld implements AutoCloseable {
     public void close() {
         village.close();
         flora.close();
+        if (water != null) {
+            water.close();
+        }
         renderer.close();
     }
 }

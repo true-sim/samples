@@ -140,6 +140,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private final PostTextures postTextures;
     private final List<AutoCloseable> owned = new ArrayList<>();
     private final List<SimpleSnow> snows = new ArrayList<>();
+    private final List<com.truesim.effects.water.WaterFlow> flows = new ArrayList<>();
     private final List<AtmosphereFog> fogs = new ArrayList<>();
     private final ScreenFlash flash = new ScreenFlash();
     private ProbeVolume volume;
@@ -325,6 +326,10 @@ public final class ShowcaseRenderer implements AutoCloseable {
             port.add(new ProbeVolumeLighting(view, volume));
         }
         port.add(new ParticleDraw(particles, view));
+        // the water's flow (effects-water's hook), its clock kept each frame
+        com.truesim.effects.water.WaterFlow flow = new com.truesim.effects.water.WaterFlow(view);
+        flows.add(flow);
+        port.add(flow);
         if (snows.isEmpty()) { // the sky's capture once, from the first view
             port.add(own(new SkyCapture(atmosphere, environment, assets.resources().textures())));
         }
@@ -404,6 +409,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         regions.update();
         for (int i = 0; i < snows.size(); i++) {
             snows.get(i).update(frameSeconds);
+        }
+        for (int i = 0; i < flows.size(); i++) {
+            flows.get(i).advance(frameSeconds);
         }
         particles.heightFocus(x, z);
         effectSync.clearViewers();

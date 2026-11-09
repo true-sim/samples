@@ -14,6 +14,7 @@ val effectsPostVersion = rootProject.extra["effectsPostVersion"] as String
 val effectsTerrainVersion = rootProject.extra["effectsTerrainVersion"] as String
 val effectsVegetationVersion = rootProject.extra["effectsVegetationVersion"] as String
 val commonProceduralVersion = rootProject.extra["commonProceduralVersion"] as String
+val effectsWaterVersion = rootProject.extra["effectsWaterVersion"] as String
 
 dependencies {
     implementation("com.truesim.engine:engine-scene:$engineVersion")
@@ -33,6 +34,7 @@ dependencies {
     implementation("com.truesim.common:common-procedural-assets:$commonProceduralVersion") // trees, shrubs, flowers
     implementation("com.truesim.common:common-procedural-ecology-terrain:$commonProceduralVersion") // which grow where
     implementation("com.truesim.common:common-procedural-settlement-terrain:$commonProceduralVersion") // the grading
+    implementation("com.truesim.effects:effects-water:$effectsWaterVersion") // the Lütschine, the Staubbach Fall
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17") // the engine's log (validation messages) on the console
 }
 

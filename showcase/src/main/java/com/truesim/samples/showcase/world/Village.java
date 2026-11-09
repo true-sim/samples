@@ -243,11 +243,17 @@ public final class Village implements AutoCloseable {
                 rules = rules.withRockColor(new com.truesim.common.math.color.Color(0.82f, 0.86f, 0.95f, 1))
                     .withGrassColor(new com.truesim.common.math.color.Color(Surfaces.MEADOW_TINT[0],
                         Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
-                    .withSnowColor(white);
+                    .withSnowColor(white).withGravelColor(white).withCobblesColor(white).withDirtColor(white)
+                    .withSandColor(new com.truesim.common.math.color.Color(1.15f, 1.05f, 0.85f, 1));
             }
             AssetRef<MaterialData> material = com.truesim.effects.terrain.TerrainMaterial.data(rules,
                 surfaces.terrainLayer(Surfaces.LIMESTONE), surfaces.terrainLayer(Surfaces.MEADOW),
-                surfaces.terrainLayer(Surfaces.SCREE), surfaces.terrainLayer(Surfaces.SNOW)).ref();
+                surfaces.terrainLayer(Surfaces.SCREE), surfaces.terrainLayer(Surfaces.SNOW),
+                // what the modifiers lay: the rivers' and the talus' gravel, the square's cobbles, the verges' worn
+                // dirt, the banks' sand
+                new com.truesim.effects.terrain.TerrainMaterial.Cover(surfaces.terrainLayer(Surfaces.SCREE),
+                    surfaces.terrainLayer(Surfaces.COBBLES), surfaces.terrainLayer(Surfaces.TRAIL),
+                    surfaces.terrainLayer(Surfaces.TRAIL))).ref();
             terrain = new com.truesim.effects.terrain.Terrain(world, assets.resources(), site, material,
                 renderer.settings(), modifiers);
         } else {

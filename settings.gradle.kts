@@ -29,7 +29,7 @@ project(":samples-showcase").projectDir = file("showcase")
 // -Ptruesim.<repo>=false uses the published artifact.
 val truesimRepos = listOf("build-logic", "common-math", "common-state", "common-jobs", "common-graph", "scene", "ui",
     "engine", "effects-particles", "effects-atmosphere", "effects-weather", "effects-post", "effects-terrain",
-    "effects-vegetation", "common-procedural")
+    "effects-vegetation", "common-procedural", "effects-water")
 for (repo in truesimRepos) {
     providers.gradleProperty("truesim.$repo").orElse("../$repo").get()
         .takeIf { file(it).isDirectory }?.let { includeBuild(it) }
