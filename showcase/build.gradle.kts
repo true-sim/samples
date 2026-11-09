@@ -97,7 +97,7 @@ tasks.register<JavaExec>("tour") {
     mainClass = "com.truesim.samples.showcase.ShowcaseTour"
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
-        "measure", "assets", "terrain", "procedural", "sunShadows")
+        "measure", "assets", "terrain", "procedural", "sunShadows", "skip")
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
@@ -107,7 +107,7 @@ tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
     val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain",
-        "procedural", "sunShadows")
+        "procedural", "sunShadows", "skip")
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 

@@ -40,7 +40,7 @@ public final class Surfaces {
     public static final Scan FLOORBOARDS = new Scan("plank_flooring_02", "2k", 2.0, 0.45f, 0.3f, 0.18f, 0.7f);
     public static final Scan GRANITE = new Scan("granite_wall", "2k", 2.0, 0.5f, 0.47f, 0.43f, 1);
     /** The terrain's layers: Lauterbrunnen's limestone cliffs, scree, the meadows, snow. */
-    public static final Scan LIMESTONE = new Scan("cliff_side", "2k", 12.0, 0.55f, 0.53f, 0.5f, 1);
+    public static final Scan LIMESTONE = new Scan("rock_face_03", "2k", 9.0, 0.55f, 0.53f, 0.5f, 1);
     public static final Scan SCREE = new Scan("gray_rocks", "2k", 3.0, 0.4f, 0.4f, 0.38f, 1);
     public static final Scan SNOW = new Scan("snow_02", "2k", 4.0, 0.85f, 0.87f, 0.9f, 1);
     /** Beams, balconies, shutters' frames: rough sawn wood. */

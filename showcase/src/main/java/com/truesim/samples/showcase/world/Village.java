@@ -3,6 +3,8 @@ package com.truesim.samples.showcase.world;
 import com.truesim.common.math.Maths;
 import com.truesim.common.math.Vec3;
 import com.truesim.effects.atmosphere.fog.IndoorZone;
+import com.truesim.effects.atmosphere.render.AerialPerspective;
+import com.truesim.engine.scene.ShadingHookOverride;
 import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.samples.showcase.assets.Surfaces;
 import com.truesim.samples.showcase.fx.VillageEffects;
@@ -173,14 +175,14 @@ public final class Village implements AutoCloseable {
         if (site != null) {
             // effects-terrain's tiles: its own layer of the same world, its own interest following the camera
             com.truesim.common.math.color.Color white = new com.truesim.common.math.color.Color(1, 1, 1, 1);
-            // Lauterbrunnen's walls are near vertical: rock (triplanar, Poly Haven's bedded cliff, greyed to the
-            // limestone's) from 28 degrees, so no face keeps a layer projected from above (its texels stretched down
+            // Lauterbrunnen's walls are near vertical: rock (triplanar, Poly Haven's rock face, greyed to the
+            // limestone's: the bedded cliff's strata tiled into brickwork) from 28 degrees, so no face keeps a layer projected from above (its texels stretched down
             // the cliff as streaks), and the projections parting sharply
             var rules = com.truesim.effects.terrain.material.TerrainParameters.DEFAULTS.withRockSlopeStart(28)
                 .withRockSlopeEnd(37).withScreeSlopeStart(20).withScreeSlopeEnd(28).withTriplanarSharpness(12);
             if (assets.polyHaven()) {
-                // the scan's ochre turned to the limestone's grey
-                rules = rules.withRockColor(new com.truesim.common.math.color.Color(0.7f, 0.8f, 1.0f, 1))
+                // the scan's beige turned to the limestone's grey
+                rules = rules.withRockColor(new com.truesim.common.math.color.Color(0.82f, 0.86f, 0.95f, 1))
                     .withGrassColor(new com.truesim.common.math.color.Color(Surfaces.MEADOW_TINT[0],
                         Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
                     .withSnowColor(white);
@@ -405,6 +407,9 @@ public final class Village implements AutoCloseable {
         }
         scene.components().set(node, Renderable.TYPE, Renderable.of(Buildings.mesh(b.spec()), materials));
         Buildings.Fittings f = Buildings.fittings(b.spec());
+        // no aerial perspective on the house and what is in it: its nearest slice tinted the rooms blue
+        // (true-sim/effects-atmosphere#9); a house is near enough that its air shows nothing outside
+        scene.components().set(node, ShadingHookOverride.TYPE, ShadingHookOverride.off(AerialPerspective.HOOK));
         // the rooms' air: no outdoor fog inside
         long zone = content.create(node);
         scene.setTranslation(zone, 0, b.spec().eaves() / 2, 0);
@@ -505,7 +510,12 @@ public final class Village implements AutoCloseable {
         if (b != null) {
             long anchor = content.create();
             place(anchor, b.x(), floorOf(b), b.z(), b.yaw());
-            spawn(model, content, anchor, p.x(), p.y(), p.z(), p.yaw(), p.scale());
+            for (long n : spawn(model, content, anchor, p.x(), p.y(), p.z(), p.yaw(), p.scale())) {
+                if (scene.components().get(n, Renderable.TYPE) != null) {
+                    scene.components().set(n, ShadingHookOverride.TYPE,
+                        ShadingHookOverride.off(AerialPerspective.HOOK));
+                }
+            }
         } else {
             long anchor = content.create();
             place(anchor, p.x(), ground.height(p.x(), p.z()) + p.y(), p.z(), p.yaw());

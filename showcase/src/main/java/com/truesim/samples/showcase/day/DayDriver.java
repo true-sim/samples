@@ -18,6 +18,7 @@ import com.truesim.effects.weather.WeatherPreset;
 import com.truesim.effects.weather.snow.SimpleSnow;
 import com.truesim.effects.weather.snow.hooks.SnowParameters;
 import com.truesim.engine.render.Camera;
+import com.truesim.engine.render.DisplayTransform;
 import com.truesim.engine.settings.EngineSettings;
 import com.truesim.samples.showcase.fx.VillageEffects;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
@@ -84,6 +85,8 @@ public final class DayDriver {
     private final Effect rain;
     private final double[] scratch = new double[3];
     private final double[] colour = new double[4];
+    private DisplayTransform.Look look = DisplayTransform.Look.PUNCHY;
+    private boolean smokeTuned;
     private WeatherPreset weather;
     private boolean stormSpawned;
     private double ev = 12;
@@ -97,11 +100,11 @@ public final class DayDriver {
         scene = renderer.scene();
         settings = renderer.settings();
         atmosphere = renderer.atmosphere();
-        // the stars a full moon's sky leaves: to the fourth and a half magnitude (some 800 over the sky), not the dark
-        // sky's thousands, which read as a dense field over a moonlit valley
+        // the stars a full moon's sky over a lit village leaves: to magnitude 3.6 (some 300 over the whole sky, a
+        // hundred or so above the valley's walls), not the dark sky's thousands
         SkySettings sky = SkySettings.forQuality(renderer.quality(), new Observer(LATITUDE, LONGITUDE, real ? 0 : 800));
         scene.components().set(renderer.skyNode(), SkyComponents.SKY,
-            sky.withStars(sky.stars().withLimitingMagnitude(4.5).withBrightness(0.6)));
+            sky.withStars(sky.stars().withLimitingMagnitude(3.6).withBrightness(0.45)));
         scene.components().set(renderer.skyNode(), SkyComponents.SKY_TIME, SkyTime.of(MIDNIGHT, 1));
         settings.set(AutoExposure.HISTOGRAM.setting("key"), AutoExposure.KeyValue.KRAWCZYK);
         // The valley's mist at dawn: flat ellipsoids along the valley floor, over the river's meadows
@@ -167,10 +170,8 @@ public final class DayDriver {
         scene.setTranslation(weatherFx, x, y + 14, z);
         snow.set(VillageEffects.RATE, (float) Math.max(state.snowfall, 1e-4) * (state.snowfall > 0 ? 1 : 0));
         rain.set(VillageEffects.RATE, (float) state.rain);
-        // each drop carries a tenth of the sky's luminance under the clouds (it shows the sky, a few pixels wide)
-        atmosphere.skyAmbient(colour);
-        float sky = (float) (0.1 * Math.clamp(renderer.environment().intensity(), 0.02, 1.5));
-        rain.set(VillageEffects.DROPS, (float) colour[0] * sky, (float) colour[1] * sky, (float) colour[2] * sky, 0.6f);
+        // the drops: lit as a white surface would be, half of it reaching the eye along each streak
+        rain.set(VillageEffects.DROPS, 0.5f, 0.52f, 0.55f, 0.6f);
         // the lights and what glows, in scene units
         double units = atmosphere.sceneUnits();
         lights(village.lamps(), state.lamps * units);
@@ -195,6 +196,17 @@ public final class DayDriver {
         // the fireworks show on the meadow south of the village (effects-particles-fireworks: shells in physical
         // units, the units the pre-exposure's), played from when its display component is set
         settings.set(FireworksSettings.LUMINANCE_SCALE, (float) units);
+        if (!smokeTuned) {
+            // the shells' smoke as puffs of a volume: thinner and spreading wider, scattering forwards so the bursts
+            // behind light it up, lingering as it drifts off in the breeze (a change makes the shells anew: once)
+            settings.set(FireworksSettings.SMOKE_EXTINCTION, 1.6f);
+            settings.set(FireworksSettings.SMOKE_PUFF, 1.6f);
+            settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 1.4f);
+            settings.set(FireworksSettings.SMOKE_PHASE, 0.75f);
+            settings.set(FireworksSettings.SMOKE_ALBEDO, 0.95f);
+            settings.set(FireworksSettings.SMOKE_TIME, 45f);
+            smokeTuned = true;
+        }
         if (state.fireworks != showing) {
             if (state.fireworks) {
                 scene.components().set(show, FireworkDisplay.TYPE, FireworkDisplay.of(FireworkShow.random(1026, 24,
@@ -204,7 +216,13 @@ public final class DayDriver {
             }
             showing = state.fireworks;
         }
+        // the particles' wind (the chimneys' smoke, the flakes, the fireworks' smoke drifting off the show): the
+        // vegetation's, a light breeze up the valley, stronger under the storm
+        double breeze = state.storm ? 6 : state.snowfall > 0.2 ? 2.5 : 1.6;
+        renderer.effects().wind((float) (0.33 * breeze), 0, (float) (0.94 * breeze));
         fireworks.update(seconds);
+        // under the storm the valley lies in its cells' shadow and their gloom
+        renderer.overcast(state.storm ? 0.15 : 1);
         // the moonlight, art-directed as night films are: the full moon's quarter lux times MOONLIGHT, so the valley
         // reads in blue light under the lamps rather than black
         atmosphere.sunDirection(scratch);
@@ -215,6 +233,14 @@ public final class DayDriver {
         renderer.lights().shadow(renderer.moonLight(), sunUp ? ShadowSpec.NONE : moonShadow());
         // depth of field for this shot
         settings.set(DepthOfField.F_STOP, (float) state.fStop);
+        // AgX's look: punchy by day; the base look once the sun is low (the alpenglow and the twilight are saturated
+        // enough of themselves: punchy turned them into a red smear) and under the storm
+        DisplayTransform.Look look = state.hour > 18.5 || state.storm ? DisplayTransform.Look.BASE
+            : DisplayTransform.Look.PUNCHY;
+        if (look != this.look) {
+            settings.set(DisplayTransform.AGX.setting("look"), look);
+            this.look = look;
+        }
         exposure(state, seconds, scratch[1], units);
         first = false;
     }

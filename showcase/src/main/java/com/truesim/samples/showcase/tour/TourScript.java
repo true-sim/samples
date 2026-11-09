@@ -138,13 +138,13 @@ public final class TourScript {
                 {0, -90, 45, 900, -130, 60, 0}, {17, -80, 50, 780, -120, 80, -200}})
                 : shot("ridge", 17, 17, new double[][] {
                     {0, 200, 4, 70, 0, 12, -10}, {17, 182, 4, 25, -10, 12, -40}})),
-            List.of(new double[] {0, 15.7, 0.0003, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.0004, 0, 0, 0, 1,
-                0.3, 0.8}, new double[] {34, 16.3, 0.00045, 0, 0, 0, 1, 0.5, 1}),
+            List.of(new double[] {0, 15.7, 0.0002, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.00026, 0, 0, 0, 1,
+                0.3, 0.8}, new double[] {34, 16.3, 0.0003, 0, 0, 0, 1, 0.5, 1}),
             s -> {
-                // nimbostratus over the valley (standing on its floor) and a storm cell in it
-                s.weather = WeatherPreset.RAIN;
+                // storm cells over the valley (standing on its floor), one spawned upwind of the village
+                s.weather = WeatherPreset.STORM; // cells with their bases, rain shafts and gaps between them
                 s.weatherRate = 2;
-                s.fogFalloff = 0.01;
+                s.fogFalloff = 0.025; // the rain's haze low in the valley, thinning up the walls
                 s.fires = true;
                 s.storm = true;
                 s.fireworks = false;

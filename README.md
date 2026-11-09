@@ -111,7 +111,7 @@ effect of the engine and its libraries on at once, in physical units from noon t
 
 - **Content, fetched on demand.** Poly Haven's CC0 textures (4K where the camera comes close: the square's
   cobbles, the walls, the planks, the roofs, the café's parquet; 2K elsewhere) and models (street lamps, café
-  furniture, a mirror, barrels, crates, benches, rocks; bark, a bedded cliff for the terrain's rock), pinned in
+  furniture, a mirror, barrels, crates, benches, rocks; bark, a rock face for the terrain's cliffs), pinned in
   [showcase/polyhaven.tsv](showcase/polyhaven.tsv) (URL, size, SHA-256) and credited in
   [showcase/CREDITS.md](showcase/CREDITS.md): `./gradlew :samples-showcase:fetchAssets` downloads what the cache
   (`~/.truesim/polyhaven`) lacks and checks every file. The terrain is effects-terrain's Lauterbrunnen site (swissALTI3D

@@ -147,9 +147,9 @@ public final class ShowcaseTour {
                             }
                             if (f % 240 == 0) {
                                 device.waitIdle();
-                                System.out.printf(Locale.ROOT, "  %s %5.1f s %-18s ev100 %5.2f, %s, %d particles%n",
+                                System.out.printf(Locale.ROOT, "  %s %5.1f s %-18s ev100 %5.2f, %s, %d particles, %d stars%n",
                                     segment.name(), t, shot.name(), world.day().ev100(), stats.summary(),
-                                    world.renderer().particles().alive());
+                                    world.renderer().particles().alive(), world.renderer().atmosphere().starCount());
                             }
                         }
                         device.waitIdle();

@@ -34,7 +34,7 @@ public final class VillageEffects {
     public static final EffectParameter.Color FLAME = EffectParameter.ofColor("flame");
     /** Embers' colour. */
     public static final EffectParameter.Color EMBER = EffectParameter.ofColor("ember");
-    /** The rain's drops: the sky's light they carry (reflected and refracted), scene units, set each frame. */
+    /** The rain's drops: how much of the light round them they carry to the eye (reflected and refracted). */
     public static final EffectParameter.Color DROPS = EffectParameter.ofColor("drops");
     /** A fire's flickering light's colour (times the light's intensity). */
     public static final EffectParameter.Color GLOW = EffectParameter.ofColor("glow");
@@ -63,7 +63,7 @@ public final class VillageEffects {
     public static final EffectData CHIMNEY = chimney();
     /** Snowflakes in a box about the camera, lit per vertex, fluttering as they fall, settling on what they hit. */
     public static final EffectData SNOW = snow();
-    /** Rain in a box about the camera: streaks along their fall, carrying the sky's light ({@link #DROPS}). */
+    /** Rain in a box about the camera: streaks along their fall, lit, adding light ({@link #DROPS}). */
     public static final EffectData RAIN = rain();
 
     private VillageEffects() {
@@ -165,8 +165,9 @@ public final class VillageEffects {
                     Init.size(Bind.random(0.012f, 0.02f)), Init.color(Bind.param(DROPS)))
                 .update(Forces.wind(0.5f))
                 .collide(Collide.rays().orElse(Collide.height()).kill())
-                // a drop shows the sky it reflects and bends towards the eye: added light, the sky's
-                .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive()
+                // a drop shows the light it reflects and bends towards the eye (the sky's, the lamps', the windows'):
+                // added light, lit per vertex, a streak along its fall
+                .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive().lighting(Renderer.Lighting.PER_VERTEX)
                     .set("stretch", 0.12f).set("soft", 0.05f).asset("texture", FxTextures.EMBER)))
             .build(ShowcaseParticleModules.MODULES.registry());
     }

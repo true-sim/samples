@@ -29,6 +29,9 @@ public final class ShowcaseSettings {
      */
     public static final Setting<String> SUN_SHADOWS = Setting.text("showcase.sunShadows", "cascades",
         "the sun's shadows: cascades or rayTraced");
+    /** Passes left out, to see what each does: environment, ao, ssr, gi, aerial, fog, clouds (comma separated). */
+    public static final Setting<String> SKIP = Setting.text("showcase.skip", "",
+        "passes left out (debugging): environment, ao, ssr, gi, aerial, fog, clouds");
     /** Where common-procedural keeps the trees and flowers it generated (made once, read on later runs). */
     public static final Setting<String> PROCEDURAL = Setting.text("showcase.procedural",
         System.getProperty("user.home") + "/.truesim/procedural",
@@ -72,7 +75,7 @@ public final class ShowcaseSettings {
         "measure frame times per segment of the tour (GPU timestamps)");
 
     /** Every one of them. */
-    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
+    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, SKIP, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
         EVERY, PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
 
     private ShowcaseSettings() {

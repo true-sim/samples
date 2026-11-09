@@ -150,6 +150,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private final double[] sunDirection = new double[3];
     private double direct = 1;
     private double moonBoost = 1;
+    private double overcast = 1;
     private boolean indoors;
 
     /**
@@ -295,13 +296,20 @@ public final class ShowcaseRenderer implements AutoCloseable {
         } else {
             port.add(new ClusteredForwardShading(geometry, view, COLOR, DEPTH).clearColor(0, 0, 0));
         }
-        port.add(new SortedTransparency(geometry, view))
-            .add(new EnvironmentLighting(environment, view))
-            .add(new ClusteredLights(lights, view))
-            .add(shadows.view(view))
-            .add(new AmbientOcclusion(view, rays))
-            .add(new ScreenSpaceReflections(view));
-        if (rays != null) {
+        // showcase.skip leaves passes out, to find which one a look comes from (a debug view per pass)
+        java.util.Set<String> skip = java.util.Set.of(settings.get(ShowcaseSettings.SKIP).split(","));
+        port.add(new SortedTransparency(geometry, view));
+        if (!skip.contains("environment")) {
+            port.add(new EnvironmentLighting(environment, view));
+        }
+        port.add(new ClusteredLights(lights, view)).add(shadows.view(view));
+        if (!skip.contains("ao")) {
+            port.add(new AmbientOcclusion(view, rays));
+        }
+        if (!skip.contains("ssr")) {
+            port.add(new ScreenSpaceReflections(view));
+        }
+        if (rays != null && !skip.contains("gi")) {
             if (volume == null) {
                 volume = new ProbeVolume(rays, renderer, lights, environment, view);
             }
@@ -311,17 +319,24 @@ public final class ShowcaseRenderer implements AutoCloseable {
         if (snows.isEmpty()) { // the sky's capture once, from the first view
             port.add(own(new SkyCapture(atmosphere, environment, assets.resources().textures())));
         }
-        port.add(new AtmosphereSky(atmosphere, view)).add(new AerialPerspective(atmosphere, view));
+        port.add(new AtmosphereSky(atmosphere, view));
+        if (!skip.contains("aerial")) {
+            port.add(new AerialPerspective(atmosphere, view));
+        }
         AtmosphereFog fog = own(new AtmosphereFog(view, regions).froxels(new VolumetricFog(atmosphere, view))
             .lighting(atmosphere));
         fogs.add(fog);
-        port.add(fog);
+        if (!skip.contains("fog")) {
+            port.add(fog);
+        }
         SimpleSnow snow = own(new SimpleSnow(geometry, view));
         snows.add(snow);
         port.add(snow);
-        port.add(new Clouds(weatherGpu, view))
-            .add(own(new CloudShadowMask(weatherGpu, view, renderer, lights, sun)))
-            .add(bolts.view(view));
+        if (!skip.contains("clouds")) {
+            port.add(new Clouds(weatherGpu, view))
+                .add(own(new CloudShadowMask(weatherGpu, view, renderer, lights, sun)))
+                .add(bolts.view(view));
+        }
         // Post: in scene light, then in display light (the presenter's or the capture's DisplayTransform made with
         // displayEffects())
         port.add(new DepthOfField(camera)).add(new Bloom(postTextures)).add(new LensEffects(camera))
@@ -360,7 +375,8 @@ public final class ShowcaseRenderer implements AutoCloseable {
         environment.intensity((float) (Math.clamp(ratio, 0.02, 1.5) * (indoors ? 0.2 : 1)));
         // under a closed cloud deck the sun gives no direct light: its share follows the sky under the clouds (the
         // cloud shadow mask darkens the ground under single clouds; this, the light the deck lets through at all)
-        direct = Math.clamp((ratio - 0.3) / 0.5, 0, 1);
+        direct = Math.min(Math.clamp((ratio - 0.3) / 0.5, 0, 1), overcast);
+        environment.intensity(environment.intensity() * (float) Math.max(overcast, 0.45));
         if (direct < 1) {
             atmosphere.lightAtCamera(0, sunLight);
             atmosphere.sunDirection(sunDirection);
@@ -392,6 +408,14 @@ public final class ShowcaseRenderer implements AutoCloseable {
     /** Whether the camera is in a building (the sky's uniform light held back). */
     public void indoors(boolean value) {
         indoors = value;
+    }
+
+    /**
+     * The share of the sun's direct light and of the sky's at most (1: as the clouds say): under the storm's cells
+     * the valley is in their shadow even where the map has a gap overhead.
+     */
+    public void overcast(double share) {
+        overcast = share;
     }
 
     /** Draws the moon's light {@code factor} times its own (night's art); 1: as the atmosphere gives it. */
