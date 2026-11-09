@@ -8,7 +8,7 @@ val effectsWeatherVersion by extra("0.6.0")
 val effectsPostVersion by extra("0.2.0")
 val effectsTerrainVersion by extra("0.5.0")
 val effectsVegetationVersion by extra("0.1.0")
-val commonProceduralVersion by extra("0.8.0")
+val commonProceduralVersion by extra("0.11.0")
 
 subprojects {
     // LWJGL and mapped GPU memory use native access.

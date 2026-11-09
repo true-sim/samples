@@ -260,7 +260,7 @@ public final class TourScript {
         return v * v;
     }
 
-    /** Walking in through a door at (x, z) facing (dx, dz): from 9 m out to 4.5 m in, at eye height. */
+    /** Walking in through a door at (x, z) facing (dx, dz): from 12 m out to 2.5 m in, at eye height. */
     private Shot door(String name, double start, double[] inn) {
         CameraSpline spline = new CameraSpline(true);
         double x = inn[0];
@@ -268,7 +268,7 @@ public final class TourScript {
         double dx = inn[2];
         double dz = inn[3];
         double floor = inn.length > 4 ? inn[4] : ground.height(x, z);
-        double[][] keys = {{0, 9, 1.7}, {6, 3.5, 1.65}, {13, -4.5, 1.6}};
+        double[][] keys = {{0, 12, 1.7}, {6, 4, 1.65}, {13, -2.5, 1.6}};
         for (double[] k : keys) {
             double ex = x + dx * k[1];
             double ez = z + dz * k[1];

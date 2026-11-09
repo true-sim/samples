@@ -9,6 +9,9 @@ import com.truesim.common.procedural.ecology.EcologyTile;
 import com.truesim.common.procedural.ecology.Instances;
 import com.truesim.common.procedural.ecology.Layer;
 import com.truesim.common.procedural.ecology.Species;
+import com.truesim.common.procedural.ecology.rocks.RockField;
+import com.truesim.common.procedural.ecology.rocks.RockInstances;
+import com.truesim.common.procedural.assets.RockAssets;
 import com.truesim.common.procedural.tree.Season;
 import com.truesim.common.procedural.tree.TreeSpecies;
 import com.truesim.effects.vegetation.GroundMap;
@@ -75,13 +78,17 @@ public final class Flora implements AutoCloseable {
     private final Map<PlantScatter, List<PlantPlacement.Plant>> placements = new IdentityHashMap<>();
     private final List<AssetRef<ModelData>> models = new ArrayList<>();
     private int plants;
+    private RockInstances rocks;
+    private Map<Integer, AssetRef<ModelData>> rockModels = Map.of();
+    private com.truesim.common.procedural.settlement.Clearing rockClearing;
+    private boolean rocksPlaced;
     private int trees;
 
     /**
      * The vegetation of {@code layout}'s village on {@code ground} as {@code ecology} has it grow, off what the
      * village's plan clears; generated meshes cached in {@code cache}, materials named through {@code named}.
      */
-    public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology,
+    public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology, RockField rocks,
         NamedMaterials named, Path cache) {
         this.renderer = renderer;
         var assets = renderer.assets();
@@ -91,6 +98,9 @@ public final class Flora implements AutoCloseable {
         double oz = layout.originZ();
         var plan = layout.settlement().clearing();
         Clearing grassGround = new Clearing(ground, plan, false);
+        double texel = MAP / MAP_TEXELS;
+        grassGround.rocks(rocks.footprint(ox - MAP / 2, oz - MAP / 2, texel, MAP_TEXELS, MAP_TEXELS), ox - MAP / 2,
+            oz - MAP / 2, texel, MAP_TEXELS);
         map = GroundMap.upload(assets.resources().textures(), grassGround, ox - MAP / 2, oz - MAP / 2, MAP,
             MAP_TEXELS);
         grassGround.map(map);
@@ -118,9 +128,66 @@ public final class Flora implements AutoCloseable {
                 snap(oz - TREES / 2, cell), TREES, Set.of(Layer.CANOPY, Layer.SHRUB));
             place(ecology, grassGround::density, snap(ox - HERBS / 2, cell), snap(oz - HERBS / 2, cell), HERBS,
                 Set.of(Layer.DWARF_SHRUB, Layer.HERB));
+            // the rocks over the trees' region, a model per variant (common-procedural's), off the roads and plots
+            this.rocks = rocks.region(snap(ox - TREES / 2, cell), snap(oz - TREES / 2, cell), TREES, TREES)
+                .instances();
+            String limestone = named.name("rocks/limestone.mat", rockMaterial(assets));
+            rockModels = RockAssets.models(procedural, this.rocks, limestone, "");
+            models.addAll(rockModels.values());
+            this.rockClearing = plan;
         }
         System.out.printf("Flora: %d plants (%d trees) of %d models placed in %.1f s%n", plants, trees, models.size(),
             (System.nanoTime() - start) / 1e9);
+    }
+
+    /** Limestone for the rocks: Poly Haven's rock face, its albedo tinted by each rock's vertex colour. */
+    private static MaterialData rockMaterial(com.truesim.samples.showcase.assets.ShowcaseAssets assets) {
+        var scan = com.truesim.samples.showcase.assets.Surfaces.LIMESTONE;
+        MaterialData.Builder b = MaterialData.builder(MaterialData.METALLIC_ROUGHNESS)
+            .set("baseColor", 0.82f, 0.85f, 0.9f, 1).set("roughness", 1f).set("metallic", 1f);
+        if (!assets.polyHaven()) {
+            return b.set("baseColor", 0.5f, 0.5f, 0.48f, 1).set("metallic", 0f).set("roughness", 0.9f).build();
+        }
+        String base = com.truesim.samples.showcase.assets.ShowcaseAssets.MOUNT + "://" + scan.asset() + "/"
+            + scan.asset() + "_";
+        String suffix = "_" + scan.resolution() + ".jpg";
+        return b.texture("baseColorTexture", assets.ref(com.truesim.scene.render.RenderAssets.TEXTURE,
+                base + "diff" + suffix))
+            .texture("ormTexture", assets.ref(com.truesim.scene.render.RenderAssets.TEXTURE, base + "arm" + suffix
+                + "#linear"))
+            .texture("normalTexture", assets.ref(com.truesim.scene.render.RenderAssets.TEXTURE, base + "nor_gl"
+                + suffix + "#linear")).build();
+    }
+
+    /**
+     * Places the rocks once their models have loaded ({@link #ready}): a node per rock, its variant's model at its
+     * place, turn and scale; none on the village's roads, square, buildings and gardens.
+     */
+    public void placeRocks() {
+        if (rocks == null || rocksPlaced) {
+            return;
+        }
+        var scene = renderer.scene();
+        var cache = renderer.assets().cache();
+        int placed = 0;
+        for (int i = 0; i < rocks.count(); i++) {
+            if (rockClearing.trees(rocks.x(i), rocks.z(i)) < 0.5) {
+                continue;
+            }
+            ModelData data = cache.get(rockModels.get(rocks.variantIndex(i)));
+            if (data == null) {
+                continue;
+            }
+            long node = scene.create();
+            scene.setTranslation(node, rocks.x(i), rocks.y(i), rocks.z(i));
+            scene.setRotation(node, rocks.qx(i), rocks.qy(i), rocks.qz(i), rocks.qw(i));
+            float s = rocks.scale(i);
+            scene.setScale(node, s, s, s);
+            data.spawn(scene, node);
+            placed++;
+        }
+        rocksPlaced = true;
+        System.out.printf("Rocks: %d of %d in %d variants%n", placed, rocks.count(), rockModels.size());
     }
 
     /** 0 within 100 m of the square, 1 from 130 m. */

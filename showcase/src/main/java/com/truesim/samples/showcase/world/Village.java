@@ -101,6 +101,17 @@ public final class Village implements AutoCloseable {
         List<VillageLayout.Fence> fences, boolean origin) {
     }
 
+    /** The geraniums' palette as a texture (sRGB). */
+    private static final com.truesim.scene.assets.Generator<String, com.truesim.scene.render.TextureData> GERANIUMS =
+        (key, seed) -> {
+            var palette = com.truesim.common.procedural.building.Geraniums.palette();
+            var texels = java.lang.foreign.Arena.ofAuto().allocate(4L * palette.width() * palette.height());
+            java.lang.foreign.MemorySegment.copy(java.lang.foreign.MemorySegment.ofArray(palette.texels()), 0, texels,
+                0, texels.byteSize());
+            return new com.truesim.scene.render.TextureData(palette.width(), palette.height(),
+                com.truesim.scene.render.TextureData.ColorSpace.SRGB, texels);
+        };
+
     /** A building in the scene: its node and the level of detail it draws. */
     private static final class Placed {
         final long node;
@@ -151,7 +162,8 @@ public final class Village implements AutoCloseable {
     private final List<Effect> smokes = new ArrayList<>();
 
     public Village(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Surfaces surfaces,
-        com.truesim.effects.terrain.data.TerrainSite site, NamedMaterials named, java.nio.file.Path cache) {
+        com.truesim.effects.terrain.data.TerrainSite site, NamedMaterials named, java.nio.file.Path cache,
+        com.truesim.effects.terrain.data.TerrainModifiers modifiers) {
         this.renderer = renderer;
         this.scene = renderer.scene();
         this.ground = ground;
@@ -182,8 +194,14 @@ public final class Village implements AutoCloseable {
         m.put(BuildingSlot.DOOR, surfaces.scan(Surfaces.DARK_WOOD));
         m.put(BuildingSlot.METAL, Surfaces.metal(0.3f, 0.3f, 0.32f, 0.5f));
         m.put(BuildingSlot.FIREWOOD, surfaces.scan(Surfaces.WORN_WOOD, 1.1f, 0.95f, 0.8f));
-        m.put(BuildingSlot.FOLIAGE, Surfaces.plain(0.05f, 0.12f, 0.03f, 0.6f));
-        m.put(BuildingSlot.FLOWERS, Surfaces.plain(0.55f, 0.04f, 0.06f, 0.5f)); // geraniums
+        // the flower boxes' geraniums: their palette (common-procedural's) as base colour, two-sided
+        AssetRef<com.truesim.scene.render.TextureData> geraniums = AssetRef.generated(RenderAssets.TEXTURE,
+            GERANIUMS, "geraniums", 1);
+        AssetRef<MaterialData> boxes = MaterialData.builder(MaterialData.METALLIC_ROUGHNESS)
+            .set("baseColor", 1, 1, 1, 1).texture("baseColorTexture", geraniums).set("roughness", 0.6f)
+            .set("metallic", 0).doubleSided(true).build().ref();
+        m.put(BuildingSlot.FOLIAGE, boxes);
+        m.put(BuildingSlot.FLOWERS, boxes);
         // the roads' slots: cobbles, gravel, dirt, kerb, steps
         roadMaterials = List.of(surfaces.scan(Surfaces.COBBLES), surfaces.scan(Surfaces.TRAIL),
             surfaces.scan(Surfaces.TRAIL, 0.75f, 0.65f, 0.55f), surfaces.scan(Surfaces.GRANITE),
@@ -231,7 +249,7 @@ public final class Village implements AutoCloseable {
                 surfaces.terrainLayer(Surfaces.LIMESTONE), surfaces.terrainLayer(Surfaces.MEADOW),
                 surfaces.terrainLayer(Surfaces.SCREE), surfaces.terrainLayer(Surfaces.SNOW)).ref();
             terrain = new com.truesim.effects.terrain.Terrain(world, assets.resources(), site, material,
-                renderer.settings());
+                renderer.settings(), modifiers);
         } else {
             terrain = null;
             world.register(GROUND, new GroundLoader());
@@ -525,8 +543,14 @@ public final class Village implements AutoCloseable {
                 materials.add(buildingMaterials.get(slot));
             }
         }
-        scene.components().set(p.node, Renderable.TYPE, Renderable.of(BuildingAssets.mesh(model, level, false),
-            materials));
+        if (p.level < 0) {
+            scene.components().set(p.node, Renderable.TYPE, Renderable.of(BuildingAssets.mesh(model, level, false),
+                materials));
+        } else {
+            // the sync follows the component's fields as they change (setting a new component does not tell it)
+            Renderable.setMaterials(scene, p.node, materials);
+            Renderable.setMesh(scene, p.node, BuildingAssets.mesh(model, level, false));
+        }
         p.level = level;
     }
 
@@ -540,11 +564,13 @@ public final class Village implements AutoCloseable {
             double dx = p.building.x() - x;
             double dz = p.building.z() - z;
             double d = Math.sqrt(dx * dx + dz * dz);
-            int want = d < 60 ? 0 : d < 160 ? 1 : d < 450 ? 2 : 3;
+            // level 0 only close (its geraniums are every leaf and flower: 14,000 triangles a metre of box; the tour comes in through
+            // the inn's door from 40 m, so the inn's next level has loaded by then)
+            int want = d < 40 ? 0 : d < 160 ? 1 : d < 450 ? 2 : 3;
             // a little hysteresis: a level changes only once past its band by a tenth
             if (p.level >= 0 && Math.abs(want - p.level) == 1) {
                 double edge = switch (Math.min(want, p.level)) {
-                    case 0 -> 60;
+                    case 0 -> 40;
                     case 1 -> 160;
                     default -> 450;
                 };

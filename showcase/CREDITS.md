@@ -7,13 +7,13 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 
 | Asset | Name | Authors | Kind | Resolution |
 |---|---|---|---|---|
-| [cobblestone_floor_03](https://polyhaven.com/a/cobblestone_floor_03) | Cobblestone Floor 03 | Rob Tuytel | texture | 4k |
-| [sparse_grass](https://polyhaven.com/a/sparse_grass) | Sparse Grass | Amal Kumar | texture | 4k |
-| [old_stone_wall](https://polyhaven.com/a/old_stone_wall) | Old Stone Wall | Charlotte Baglioni | texture | 4k |
-| [white_plaster_02](https://polyhaven.com/a/white_plaster_02) | White Plaster 02 | Rob Tuytel | texture | 4k |
-| [weathered_planks](https://polyhaven.com/a/weathered_planks) | Weathered Planks | Dario Barresi, Dimitrios Savva | texture | 4k |
-| [roof_slates_02](https://polyhaven.com/a/roof_slates_02) | Roof Slates 02 | Rob Tuytel | texture | 4k |
-| [herringbone_parquet](https://polyhaven.com/a/herringbone_parquet) | Herringbone Parquet | Jenelle van Heerden, Sergej Majboroda | texture | 4k |
+| [cobblestone_floor_03](https://polyhaven.com/a/cobblestone_floor_03) | Cobblestone Floor 03 | Rob Tuytel | texture | 2k |
+| [sparse_grass](https://polyhaven.com/a/sparse_grass) | Sparse Grass | Amal Kumar | texture | 2k |
+| [old_stone_wall](https://polyhaven.com/a/old_stone_wall) | Old Stone Wall | Charlotte Baglioni | texture | 2k |
+| [white_plaster_02](https://polyhaven.com/a/white_plaster_02) | White Plaster 02 | Rob Tuytel | texture | 2k |
+| [weathered_planks](https://polyhaven.com/a/weathered_planks) | Weathered Planks | Dario Barresi, Dimitrios Savva | texture | 2k |
+| [roof_slates_02](https://polyhaven.com/a/roof_slates_02) | Roof Slates 02 | Rob Tuytel | texture | 2k |
+| [herringbone_parquet](https://polyhaven.com/a/herringbone_parquet) | Herringbone Parquet | Jenelle van Heerden, Sergej Majboroda | texture | 2k |
 | [painted_plaster_wall](https://polyhaven.com/a/painted_plaster_wall) | Painted Plaster Wall | Amal Kumar | texture | 2k |
 | [roof_09](https://polyhaven.com/a/roof_09) | Roof 09 | Rob Tuytel | texture | 2k |
 | [roof_slates_03](https://polyhaven.com/a/roof_slates_03) | Roof Slates 03 | Rob Tuytel | texture | 2k |

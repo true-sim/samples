@@ -13,7 +13,7 @@ import com.truesim.engine.settings.EngineSettings;
  */
 public final class TerrainGround implements Ground {
 
-    private final TerrainSurface surface;
+    private volatile TerrainSurface surface;
     private final double spacing;
 
     public TerrainGround(TerrainSite site, EngineSettings settings) {
@@ -29,6 +29,14 @@ public final class TerrainGround implements Ground {
     @Override
     public void normal(double x, double z, double[] out) {
         surface.normalAt(x, z, spacing, out);
+    }
+
+    /**
+     * The ground with {@code modifiers} (the talus' gravel and roughness, the village's grading): what the terrain's
+     * tiles draw, so what stands on it stands on what is drawn.
+     */
+    public void modify(com.truesim.effects.terrain.data.TerrainModifiers modifiers) {
+        surface = surface.withModifiers(modifiers);
     }
 
     public TerrainSurface surface() {

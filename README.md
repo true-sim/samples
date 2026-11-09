@@ -109,9 +109,9 @@ title shows the frame rate, GPU time, render size and display encoding. Settings
 `showcase` (module `samples-showcase`) is the full demo: an Alpine village over one day in Lauterbrunnen, every
 effect of the engine and its libraries on at once, in physical units from noon to a moonlit night.
 
-- **Content, fetched on demand.** Poly Haven's CC0 textures (4K where the camera comes close: the square's
-  cobbles, the walls, the planks, the roofs, the café's parquet; 2K elsewhere) and models (street lamps, café
-  furniture, a mirror, barrels, crates, benches, rocks; bark, a rock face for the terrain's cliffs), pinned in
+- **Content, fetched on demand.** Poly Haven's CC0 textures at 2K (the scene's GPU memory goes to its
+  geometry; 4K scans ran it out beside other work) and models (street lamps, the inn's and houses' furniture,
+  barrels, crates, benches, stumps; bark, shingles, a rock face for the terrain's cliffs and the rocks), pinned in
   [showcase/polyhaven.tsv](showcase/polyhaven.tsv) (URL, size, SHA-256) and credited in
   [showcase/CREDITS.md](showcase/CREDITS.md): `./gradlew :samples-showcase:fetchAssets` downloads what the cache
   (`~/.truesim/polyhaven`) lacks and checks every file. The terrain is effects-terrain's Lauterbrunnen site (swissALTI3D

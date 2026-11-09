@@ -4,9 +4,7 @@ import com.truesim.common.math.Maths;
 import com.truesim.common.math.Vec3;
 import com.truesim.common.procedural.building.Anchor;
 import com.truesim.common.procedural.building.BuildingKind;
-import com.truesim.common.procedural.building.BuildingSpec;
 import com.truesim.common.procedural.building.Buildings;
-import com.truesim.common.procedural.building.Footprint;
 import com.truesim.common.procedural.settlement.PropKind;
 import com.truesim.common.procedural.settlement.RoadKind;
 import com.truesim.common.procedural.settlement.Settlement;
@@ -77,8 +75,7 @@ public final class VillageLayout {
 
     /** Every Poly Haven model the village may draw (the props' and the furniture's, the street lamps). */
     public static final java.util.Set<String> MODELS = java.util.Set.of("painted_wooden_bench",
-        "outdoor_table_chair_set_01", "planter_box_01", "wine_barrel_01", "wooden_crate_01", "rock_moss_set_01",
-        "boulder_01", "tree_stump_01", "round_wooden_table_01", "Lantern_01", "painted_wooden_chair_02",
+        "outdoor_table_chair_set_01", "planter_box_01", "wine_barrel_01", "wooden_crate_01", "tree_stump_01", "round_wooden_table_01", "Lantern_01", "painted_wooden_chair_02",
         "painted_wooden_cabinet", "wooden_display_shelves_01", "wine_bottles_01", "ArmChair_01", "Chandelier_01",
         "street_lamp_01");
 
@@ -95,12 +92,8 @@ public final class VillageLayout {
         // the buildings, generated on all cores (some 30,000 triangles each at full detail)
         com.truesim.common.procedural.building.Building[] made =
             new com.truesim.common.procedural.building.Building[planned.size()];
-        IntStream.range(0, planned.size()).parallel().forEach(i -> {
-            Settlement.Building b = planned.get(i);
-            BuildingSpec spec = BuildingSpec.of(kind(b.spec().kind()), new Footprint(b.x(), b.z(), b.yaw(),
-                b.spec().width(), b.spec().depth()), b.spec().seed()).withFloors(Math.max(1, b.spec().floors()));
-            made[i] = Buildings.generate(spec, ground::height);
-        });
+        IntStream.range(0, planned.size()).parallel().forEach(i ->
+            made[i] = Buildings.generate(planned.get(i).spec(), ground::height));
         int house = 0;
         for (int i = 0; i < planned.size(); i++) {
             Settlement.Building b = planned.get(i);
@@ -123,14 +116,8 @@ public final class VillageLayout {
         for (Settlement.Prop p : settlement.props()) {
             String model = model(p.kind());
             if (model != null) {
-                double scale = switch (p.kind()) {
-                    case ROCK -> 0.4 + 0.3 * unit(p.x(), p.z());
-                    case BOULDER -> 0.9 + 1.2 * unit(p.x(), p.z());
-                    case STUMP -> 1 + unit(p.x(), p.z());
-                    default -> 1;
-                };
-                double lift = p.kind() == PropKind.ROCK || p.kind() == PropKind.BOULDER ? -0.15 * scale : 0;
-                props.add(new Prop(model, p.x(), lift, p.z(), p.yaw(), scale, null));
+                double scale = p.kind() == PropKind.STUMP ? 1 + unit(p.x(), p.z()) : 1;
+                props.add(new Prop(model, p.x(), 0, p.z(), p.yaw(), scale, null));
             }
         }
         for (Settlement.Lamp l : settlement.lamps()) {
@@ -142,18 +129,10 @@ public final class VillageLayout {
         }
     }
 
-    /** The plan's kind as the buildings generator's: houses are chalets (their spec to be unified). */
-    static BuildingKind kind(com.truesim.common.procedural.settlement.BuildingKind kind) {
-        return switch (kind) {
-            case CHURCH -> BuildingKind.CHURCH;
-            case INN -> BuildingKind.INN;
-            case HOUSE -> BuildingKind.CHALET;
-            case FARMHOUSE -> BuildingKind.FARMHOUSE;
-            case HAY_BARN -> BuildingKind.HAY_BARN;
-        };
-    }
-
-    /** Poly Haven's model for a plan's prop, or null (none drawn yet: fountains, troughs, signposts, woodpiles). */
+    /**
+     * Poly Haven's model for a plan's prop, or null: rocks and boulders are the rock field's (common-procedural's
+     * rocks, {@code Flora}); fountains, troughs, signposts and woodpiles are not drawn yet.
+     */
     static String model(PropKind kind) {
         return switch (kind) {
             case BENCH -> "painted_wooden_bench";
@@ -161,8 +140,6 @@ public final class VillageLayout {
             case PLANTER -> "planter_box_01";
             case BARREL -> "wine_barrel_01";
             case CRATE -> "wooden_crate_01";
-            case ROCK -> "rock_moss_set_01";
-            case BOULDER -> "boulder_01";
             case STUMP -> "tree_stump_01";
             default -> null;
         };

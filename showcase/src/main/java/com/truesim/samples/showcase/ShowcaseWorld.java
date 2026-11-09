@@ -11,7 +11,13 @@ import com.truesim.common.procedural.ecology.AlpineSpecies;
 import com.truesim.common.procedural.ecology.Ecology;
 import com.truesim.common.procedural.ecology.EcologyParameters;
 import com.truesim.common.procedural.ecology.EcologyTerrain;
+import com.truesim.common.procedural.ecology.rocks.RockField;
+import com.truesim.common.procedural.ecology.rocks.RockFieldParameters;
+import com.truesim.common.procedural.ecology.terrain.TalusModifier;
 import com.truesim.common.procedural.ecology.terrain.TerrainEcology;
+import com.truesim.common.procedural.settlement.terrain.SettlementTerrain;
+import com.truesim.effects.terrain.data.TerrainModifier;
+import com.truesim.effects.terrain.data.TerrainModifiers;
 import com.truesim.common.procedural.settlement.Settlement;
 import com.truesim.common.procedural.settlement.Settlements;
 import com.truesim.samples.showcase.assets.NamedMaterials;
@@ -71,10 +77,29 @@ public final class ShowcaseWorld implements AutoCloseable {
         long start = System.nanoTime();
         EcologyTerrain terrain = ground instanceof TerrainGround t ? TerrainEcology.of(t.surface(), 2)
             : (x, z) -> ground.height(x, z) + 800;
-        Ecology ecology = new Ecology(terrain, EcologyParameters.ALPS.withSeed(7)
+        Ecology plain = new Ecology(terrain, EcologyParameters.ALPS.withSeed(7)
             .withLandUse(EcologyParameters.LandUse.MEADOWS), AlpineSpecies.ALL);
+        // the rocks where the terrain sheds them (talus under the walls, rockfall, stream boulders, clearance piles,
+        // erratics), and the plants kept off them
+        // (fewer variants than the library's: two seeds, two cover levels, one depth, so fewer models on the GPU)
+        RockField rocks = new RockField(plain, RockFieldParameters.DEFAULTS.withVariants(
+            new RockFieldParameters.Variants(2, 4, 2, 1)));
+        Ecology ecology = plain.avoiding(rocks);
+        Ecology placing;
         Settlement plan = Settlements.plan(SettlementSettings.parameters(graph.settings()), ecology,
             site != null ? VILLAGE_X : 0, site != null ? VILLAGE_Z : 0, 7);
+        // what the plan and the rocks change in the terrain, as effects-terrain's modifiers: the talus' gravel and
+        // roughness, then the village's grading (its roads' and square's cut and fill, verges, gravel scatter); the
+        // ground then gives the modified heights, so the buildings, the props and the grass stand on what is drawn
+        TerrainModifiers modifiers = TerrainModifiers.NONE;
+        if (ground instanceof TerrainGround t) {
+            double ox = plan.square().x();
+            double oz = plan.square().z();
+            modifiers = TerrainModifiers.of(new TalusModifier(rocks, TalusModifier.Parameters.DEFAULTS,
+                new TerrainModifier.Bounds(ox - 1500, oz - 1500, ox + 1500, oz + 1500)))
+                .with(SettlementTerrain.of(plan));
+            t.modify(modifiers);
+        }
         layout = new VillageLayout(plan, ground);
         System.out.printf("Village: %d buildings, %d roads, %d props, %d fences planned and built in %.1f s%n",
             layout.buildings().size(), plan.roads().size(), layout.props().size(), layout.fences().size(),
@@ -82,14 +107,16 @@ public final class ShowcaseWorld implements AutoCloseable {
         Surfaces surfaces = new Surfaces(assets);
         NamedMaterials named = new NamedMaterials(assets);
         Path cache = Path.of(graph.settings().get(ShowcaseSettings.PROCEDURAL));
-        village = new Village(renderer, ground, layout, surfaces, site, named, cache);
+        village = new Village(renderer, ground, layout, surfaces, site, named, cache, modifiers);
+        // the plants kept off the plan's roads, square, plots and buildings before they are spaced
+        placing = ecology.withClearing(plan.clearing());
         // the particles' textures, held and loaded before the first fire
         for (AssetRef<TextureData> ref : List.of(FxTextures.FLAME, FxTextures.GLOW, FxTextures.EMBER, FxTextures.SMOKE,
             FxTextures.SMOKE_NORMALS)) {
             assets.resources().hold(ref);
         }
         // the valley's grass, trees, shrubs and flowers, where the ecology puts them
-        flora = new Flora(renderer, ground, layout, ecology, named, cache);
+        flora = new Flora(renderer, ground, layout, placing, rocks, named, cache);
         flora.hold();
         village.awaitModels(Duration.ofMinutes(3));
         long deadline = System.nanoTime() + Duration.ofMinutes(5).toNanos();
@@ -97,6 +124,7 @@ public final class ShowcaseWorld implements AutoCloseable {
             assets.drain();
             Thread.sleep(10);
         }
+        flora.placeRocks();
         day = new DayDriver(renderer, village, ground, layout, site != null);
     }
 
@@ -162,7 +190,7 @@ public final class ShowcaseWorld implements AutoCloseable {
     /** The tour through this world: the village's shots along its main street, the café's through the inn's door. */
     public com.truesim.samples.showcase.tour.TourScript tour() {
         return new com.truesim.samples.showcase.tour.TourScript(ground, layout.originX(), layout.originZ(),
-            site != null, layout.streetSouth(), layout.innDoor()).clear((x, z) -> layout.near(x, z, 1.5) != null);
+            site != null, layout.streetSouth(), layout.innDoor()).clear((x, z) -> layout.near(x, z, 3.5) != null);
     }
 
     public Flora flora() {

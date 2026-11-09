@@ -32,6 +32,7 @@ dependencies {
     implementation("com.truesim.effects:effects-vegetation:$effectsVegetationVersion") // GPU grass, plants in the wind
     implementation("com.truesim.common:common-procedural-assets:$commonProceduralVersion") // trees, shrubs, flowers
     implementation("com.truesim.common:common-procedural-ecology-terrain:$commonProceduralVersion") // which grow where
+    implementation("com.truesim.common:common-procedural-settlement-terrain:$commonProceduralVersion") // the grading
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17") // the engine's log (validation messages) on the console
 }
 
