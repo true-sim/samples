@@ -2,6 +2,7 @@ package com.truesim.samples.showcase;
 
 import com.truesim.common.math.Maths;
 import com.truesim.engine.graph.FrameGraph;
+import com.truesim.engine.settings.EngineSettings;
 import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
 import com.truesim.engine.render.SceneView;
@@ -82,6 +83,10 @@ public final class ShowcaseWorld implements AutoCloseable {
     public static final double VILLAGE_Z = 300;
 
     public ShowcaseWorld(VulkanDevice device, FrameGraph graph, ShowcaseAssets assets) throws InterruptedException {
+        // effects-terrain's cliffs at their finest: 32 m tiles over 11 levels (the walls' relief meshed); set before
+        // the ground reads the tiles' spacing, so what stands on it stands on what is drawn
+        graph.settings().set(EngineSettings.Layer.GAME, com.truesim.effects.terrain.TerrainSettings.TILE_SIZE, 32f);
+        graph.settings().set(EngineSettings.Layer.GAME, com.truesim.effects.terrain.TerrainSettings.LEVELS, 11);
         site = assets.terrain() ? site(assets) : null;
         ground = site != null ? new TerrainGround(site, graph.settings()) : new ValleyGround();
         renderer = new ShowcaseRenderer(device, graph, assets, ground);

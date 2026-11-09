@@ -244,7 +244,9 @@ public final class Village implements AutoCloseable {
                     .withGrassColor(new com.truesim.common.math.color.Color(Surfaces.MEADOW_TINT[0],
                         Surfaces.MEADOW_TINT[1], Surfaces.MEADOW_TINT[2], 1)).withScreeColor(white)
                     .withSnowColor(white).withGravelColor(white).withCobblesColor(white).withDirtColor(white)
-                    .withSandColor(new com.truesim.common.math.color.Color(1.15f, 1.05f, 0.85f, 1));
+                    .withSandColor(new com.truesim.common.math.color.Color(1.15f, 1.05f, 0.85f, 1))
+                    .withCliffColor(new com.truesim.common.math.color.Color(0.8f, 0.8f, 0.8f, 1))
+                    .withCliffSaturation(0.2f);
             }
             AssetRef<MaterialData> material = com.truesim.effects.terrain.TerrainMaterial.data(rules,
                 surfaces.terrainLayer(Surfaces.LIMESTONE), surfaces.terrainLayer(Surfaces.MEADOW),
@@ -253,7 +255,10 @@ public final class Village implements AutoCloseable {
                 // dirt, the banks' sand
                 new com.truesim.effects.terrain.TerrainMaterial.Cover(surfaces.terrainLayer(Surfaces.SCREE),
                     surfaces.terrainLayer(Surfaces.COBBLES), surfaces.terrainLayer(Surfaces.TRAIL),
-                    surfaces.terrainLayer(Surfaces.TRAIL))).ref();
+                    surfaces.terrainLayer(Surfaces.TRAIL)),
+                // the walls from 50 degrees: effects-terrain's cliffs (relief, strata), Poly Haven's rock face as the
+                // limestone, nearly grey
+                surfaces.terrainLayer(Surfaces.LIMESTONE)).ref();
             terrain = new com.truesim.effects.terrain.Terrain(world, assets.resources(), site, material,
                 renderer.settings(), modifiers);
         } else {

@@ -302,6 +302,10 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // screen-space reflections on the transparent surfaces too: the river reflects the cliffs, trees and houses,
         // the windows the street (engine 0.201)
         settings.set(game, com.truesim.engine.render.ScreenSpaceReflections.TRANSPARENT, true);
+        // with the sun's traced shadows the cliffs' relief on fewer levels (the bottom levels' memory)
+        if ("rayTraced".equals(settings.get(ShowcaseSettings.SUN_SHADOWS))) {
+            settings.set(game, com.truesim.effects.terrain.TerrainSettings.CLIFF_LEVELS, 2);
+        }
     }
 
     /**
