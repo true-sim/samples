@@ -9,7 +9,6 @@ import com.truesim.common.procedural.assets.SceneMeshes;
 import com.truesim.common.procedural.building.Anchor;
 import com.truesim.common.procedural.building.BuildingKind;
 import com.truesim.common.procedural.building.BuildingSlot;
-import com.truesim.common.procedural.building.Opening;
 import com.truesim.common.procedural.building.Room;
 import com.truesim.common.procedural.fence.FenceMaterial;
 import com.truesim.common.procedural.fence.FenceOptions;
@@ -117,6 +116,11 @@ public final class Village implements AutoCloseable {
         final long node;
         final Building building;
         int level = -1;
+        /** The child drawing the level, and the one drawing the level before until the new one has loaded. */
+        long drawn = -1;
+        long leaving = -1;
+        AssetRef<com.truesim.scene.assets.mesh.MeshData> mesh;
+        int since;
 
         Placed(long node, Building building) {
             this.node = node;
@@ -151,10 +155,6 @@ public final class Village implements AutoCloseable {
     /** The street lamps' lantern glass: frosted, lit from within. */
     public final AssetRef<MaterialData> lampGlass = Surfaces.glowing(0.9f, 0.85f, 0.75f, 0.25f);
     public final AssetRef<MaterialData> roomGlow = Surfaces.glowing(1, 0.8f, 0.55f, 0.45f);
-    /** A lit room's window seen from outside: its curtain glowing, two-sided. */
-    public final AssetRef<MaterialData> windowGlow = MaterialData.builder(MaterialData.METALLIC_ROUGHNESS)
-        .set("baseColor", 0.9f, 0.75f, 0.5f, 1).set("roughness", 0.8f).set("metallic", 0)
-        .set("emissive", 0, 0, 0).doubleSided(true).build().ref();
     /** The day's registries: street lamps and door lanterns, rooms' lights, fires, chimneys' smoke. */
     private final List<Light> lamps = new ArrayList<>();
     private final List<Light> rooms = new ArrayList<>();
@@ -498,23 +498,6 @@ public final class Village implements AutoCloseable {
                     Renderable.setCastsShadows(scene, bulb, false);
                 }
             }
-            // the lit rooms' windows: a curtain glowing behind each, seen from outside at night (not the inn's and
-            // the church's: the tour goes into the one, the other's are tall stone-framed lights)
-            if (kind == BuildingKind.CHALET || kind == BuildingKind.FARMHOUSE) {
-                for (Opening o : fittings.openings(Opening.Kind.WINDOW)) {
-                    if (o.room() < 0) {
-                        continue;
-                    }
-                    Vec3 c = o.center();
-                    Vec3 out = o.outward();
-                    long pane = content.create(node);
-                    double back = o.depth() + 0.04;
-                    place(pane, c.x() - out.x() * back, c.y(), c.z() - out.z() * back, Maths.atan2(out.x(), out.z()));
-                    scene.components().set(pane, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Pane(
-                        o.width() * 0.9, o.height() * 0.9)), List.of(windowGlow)));
-                    Renderable.setCastsShadows(scene, pane, false);
-                }
-            }
             for (Anchor a : fittings.all(Anchor.Kind.LANTERN)) {
                 Vec3 at = a.position();
                 long l = content.create(node);
@@ -554,14 +537,18 @@ public final class Village implements AutoCloseable {
                 materials.add(buildingMaterials.get(slot));
             }
         }
-        if (p.level < 0) {
-            scene.components().set(p.node, Renderable.TYPE, Renderable.of(BuildingAssets.mesh(model, level, false),
-                materials));
-        } else {
-            // the sync follows the component's fields as they change (setting a new component does not tell it)
-            Renderable.setMaterials(scene, p.node, materials);
-            Renderable.setMesh(scene, p.node, BuildingAssets.mesh(model, level, false));
+        // each level on a child of its own: changing a renderable's mesh and materials (in place, or taken away and
+        // set anew in a frame) made the scene's sync look up a material it had let go (true-sim/engine#477); the
+        // level before stays until the new one's mesh has loaded and had time to reach the GPU
+        if (p.leaving >= 0) {
+            scene.remove(p.leaving);
         }
+        p.leaving = p.drawn;
+        p.since = 0;
+        p.mesh = BuildingAssets.mesh(model, level, false);
+        p.drawn = scene.create(p.node);
+        scene.setLayers(p.drawn, scene.layers(p.node)); // the world's layers the views draw, as its parent's
+        scene.components().set(p.drawn, Renderable.TYPE, Renderable.of(p.mesh, materials));
         p.level = level;
     }
 
@@ -572,18 +559,21 @@ public final class Village implements AutoCloseable {
      */
     private void levels(double x, double z) {
         for (Placed p : placed) {
+            if (p.leaving >= 0 && assets.cache().get(p.mesh) != null && ++p.since > 120) {
+                scene.remove(p.leaving); // the new level is there (loaded, and on the GPU some frames later)
+                p.leaving = -1;
+            }
             double dx = p.building.x() - x;
             double dz = p.building.z() - z;
             double d = Math.sqrt(dx * dx + dz * dz);
-            // level 0 only close (its geraniums are every leaf and flower: 14,000 triangles a metre of box; the tour comes in through
-            // the inn's door from 40 m, so the inn's next level has loaded by then)
-            int want = d < 40 ? 0 : d < 160 ? 1 : d < 450 ? 2 : 3;
+            // level 1 nearest: level 0 (every leaf and flower of the geraniums) loads, as far as the cache says,
+            // but never draws (common-procedural#24)
+            int want = d < 220 ? 1 : d < 500 ? 2 : 3;
             // a little hysteresis: a level changes only once past its band by a tenth
             if (p.level >= 0 && Math.abs(want - p.level) == 1) {
                 double edge = switch (Math.min(want, p.level)) {
-                    case 0 -> 40;
-                    case 1 -> 160;
-                    default -> 450;
+                    case 1 -> 220;
+                    default -> 500;
                 };
                 if (Math.abs(d - edge) < edge * 0.1) {
                     continue;

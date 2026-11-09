@@ -98,7 +98,7 @@ tasks.register<JavaExec>("tour") {
     description = "Renders the showcase's day as a film of PNG frames, or measures its frame times per segment."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass = "com.truesim.samples.showcase.ShowcaseTour"
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx16g")
     // the film is made without global illumination (-Pgi=probes or cascades to have it): the interactive app has it
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
         "measure", "assets", "terrain", "procedural", "sunShadows", "skip") +
@@ -110,7 +110,7 @@ tasks.register<JavaExec>("tour") {
 // [-Pgi=cascades] [-Pseconds=n]
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx8g")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx16g")
     val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain",
         "procedural", "sunShadows", "skip")
     argumentProviders.add(CommandLineArgumentProvider { settings })

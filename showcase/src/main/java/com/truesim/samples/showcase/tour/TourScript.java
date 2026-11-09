@@ -14,7 +14,7 @@ import java.util.List;
  *   <li><b>dawn</b>: mist in the valley, smoke from the chimneys standing in still air, the sun rising over the
  *       eastern ridge; low through the meadow towards the village, then up over the street;</li>
  *   <li><b>water</b> (late morning, where the network has them): low along the Weisse Lütschine's bank, its stones,
- *       foam and wet banks; then at the Staubbach Fall's foot, looking up the sheet through its spray;</li>
+ *       foam and wet banks; then the Staubbach Fall from the meadow before it, its spray at the foot;</li>
  *   <li><b>noon</b>: cumulus drifting, their shadows sweeping the valley; a wide view towards the Jungfrau, a walk
  *       into the square, and in through the inn's door;</li>
  *   <li><b>storm</b>: storm cells roll in, rain and lightning; the street in the rain, then up the valley;</li>
@@ -229,9 +229,9 @@ public final class TourScript {
         // the night: the sky cleared, the moon up; the show over the village, framed across its roofs
         segments.add(new Segment("night", 34, List.of(
             shot("over the village", 0, 17, new double[][] {
-                {0, 0, 16, 80, 8, 120, -150}, {17, -3, 15, 70, 8, 130, -150}}),
+                {0, 0, 14, 80, 8, 55, -150}, {17, -3, 13, 68, 8, 60, -150}}),
             shot("from the square", 17, 17, new double[][] {
-                {0, -7, 2.0, 9, 8, 120, -150}, {17, -3, 2.2, 5, 8, 130, -150}})),
+                {0, -7, 2.0, 9, 8, 45, -150}, {17, -3, 2.2, 5, 8, 50, -150}})),
             List.of(new double[] {0, 23.3, 0.0004, 0, 0, 0.45, 0, 1, 1}, new double[] {34, 23.6, 0.0004, 0, 0, 0.45,
                 0, 1, 1}),
             s -> {
@@ -318,7 +318,7 @@ public final class TourScript {
         return new Shot(name, start, spline);
     }
 
-    /** At the tallest fall's foot, looking up the sheet through its spray, drawing back. */
+    /** Before the tallest fall, from the meadow: the sheet down the wall and its spray at the foot, closing in. */
     private Shot staubbach(String name, double start) {
         CameraSpline spline = new CameraSpline(true);
         double ax = fall[0] - fall[3];
@@ -326,11 +326,11 @@ public final class TourScript {
         double l = Math.max(Math.sqrt(ax * ax + az * az), 1e-6);
         ax /= l; // away from the cliff, the way the water falls out
         az /= l;
-        double[][] keys = {{0, 18, 1.7}, {15, 34, 2.2}};
+        double[][] keys = {{0, 230, 8}, {15, 190, 6}}; // from the meadow: the whole fall, its spray at the foot
         for (double[] k : keys) {
             double ex = fall[0] + ax * k[1];
             double ez = fall[2] + az * k[1];
-            double ty = fall[1] + (fall[4] - fall[1]) * 0.55;
+            double ty = fall[1] + (fall[4] - fall[1]) * 0.45;
             spline.key(k[0], ex, ground.height(ex, ez) + k[2], ez, fall[3], ty, fall[5]);
         }
         return new Shot(name, start, spline);

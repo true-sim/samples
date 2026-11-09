@@ -88,8 +88,10 @@ public final class ShowcaseAssets implements AutoCloseable {
     public static ShowcaseAssets standalone(VulkanDevice device, FrameSlots slots, EngineSettings settings) {
         TaskScheduler tasks = new TaskScheduler();
         AssetCache cache = new AssetCache(tasks);
-        cache.setBudget(2048L << 20); // streamed cells come back without reloading
-        GeometryPool pool = new GeometryPool(device, GeometryPool.Capacity.of(1 << 24, 1 << 18, 1 << 13), slots);
+        cache.setBudget(12L << 30); // streamed cells come back without reloading; nothing evicted mid-tour
+        // room for everything at full detail: the terrain's fine tiles and cliffs, the forest's and the rocks'
+        // hierarchies, every building's levels (at 2^18 meshlets the inn's nearer levels found no room and never drew)
+        GeometryPool pool = new GeometryPool(device, GeometryPool.Capacity.of(1 << 26, 1 << 21, 1 << 15), slots);
         Materials materials = new Materials(device, 4096, slots);
         Textures textures = new Textures(device, slots);
         // whole: a renderable shows once its materials' textures are there too, so nothing pops in untextured

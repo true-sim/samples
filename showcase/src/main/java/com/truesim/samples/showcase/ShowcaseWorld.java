@@ -151,7 +151,7 @@ public final class ShowcaseWorld implements AutoCloseable {
             var tallest = rivers.tallest().path();
             int last = tallest.x().length - 1;
             flora.scree(new RockScatter(rocks, RockScatter.Parameters.DEFAULTS, (x, z) -> ground.height(x, z)),
-                tallest.x()[last], tallest.z()[last], 320, 60, named);
+                tallest.x()[last], tallest.z()[last], 320, 22, named);
         }
         // the water: its channels, falls, stones, spray and mist placed in the scene (effects-water)
         if (rivers != null) {

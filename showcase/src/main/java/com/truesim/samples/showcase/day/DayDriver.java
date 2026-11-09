@@ -201,6 +201,10 @@ public final class DayDriver {
             // lingering as it drifts off in the breeze (thinner, wider puffs stood as dark blobs against the glow;
             // a change makes the shells anew: once)
             settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 1.0f);
+            // no smoke on engine 0.203 until effects-particles is rebuilt on it: the smoke draws at half resolution,
+            // whose depth pass pushes the engine's old 40-byte record to a 32-byte pipeline (effects-particles#7)
+            settings.set(FireworksSettings.SMOKE, 0f);
+            settings.set(FireworksSettings.BURST_SMOKE, 0f);
             settings.set(FireworksSettings.SMOKE_PHASE, 0.75f);
             settings.set(FireworksSettings.SMOKE_ALBEDO, 0.95f);
             settings.set(FireworksSettings.SMOKE_TIME, 40f);
