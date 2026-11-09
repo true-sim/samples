@@ -76,20 +76,44 @@ public final class TourScript {
     private final Ground ground;
     private final double ox;
     private final double oz;
+    /** Whether a world point (x, z) is in or beside a building: the village's shots keep their eyes off them. */
+    private java.util.function.BiPredicate<Double, Double> blocked = (x, z) -> false;
+    /** The street the village's shots follow: x, z pairs from the square's centre outwards (south). */
+    private final double[] street;
+    private final boolean real;
+    private final double[] inn;
 
-    /** The tour in the valley made from functions, the square at the origin. */
+    /** The tour in the valley made from functions, the square at the origin, the street straight south. */
     public TourScript(Ground ground) {
-        this(ground, 0, 0, false);
+        this(ground, 0, 0, false, null, null);
     }
 
     /**
      * The tour over {@code ground}, the village's square at ({@code ox}, {@code oz}); {@code real}: Lauterbrunnen's
-     * terrain, its landscape shots at the Staubbach cliff and towards the Jungfrau.
+     * terrain, its landscape shots at the Staubbach cliff and towards the Jungfrau. The village's shots follow
+     * {@code street} (the main road's centre line south of the square, x, z pairs; null: straight south): a shot's x is
+     * across it (east of it where it runs south), its z along it from the square's centre. {@code inn}: the inn's door
+     * and the way its front faces (x, z, dx, dz), which the café shot walks in through (null: the old plan's café).
      */
-    public TourScript(Ground ground, double ox, double oz, boolean real) {
+    public TourScript(Ground ground, double ox, double oz, boolean real, double[] street, double[] inn) {
         this.ground = ground;
         this.ox = ox;
         this.oz = oz;
+        if (street == null) {
+            this.street = new double[] {ox, oz, ox, oz + 1000};
+        } else {
+            this.street = new double[street.length + 2];
+            this.street[0] = ox;
+            this.street[1] = oz;
+            System.arraycopy(street, 0, this.street, 2, street.length);
+        }
+        this.real = real;
+        this.inn = inn;
+        build();
+    }
+
+    /** The segments and their shots. */
+    private void build() {
         // keys: t, hour, fog, mist, snowfall, snowCover, rain, lamps, rooms
         segments.add(new Segment("dawn", 32, List.of(
             shot("meadow", 0, 17, new double[][] {
@@ -114,8 +138,8 @@ public final class TourScript {
                     {0, 110, 30, 95, 0, 10, -10}, {14, 82, 22, 50, -10, 6, -30}}),
             shot("square", 14, 15, new double[][] {
                 {0, -1, 1.7, 32, 1, 2.5, -14}, {15, 0.5, 1.7, 0, 1.5, 2, -14}}),
-            // straight in through the café's open door (plan x 1, the square's front 13.55 m north), to its mirror
-            shot("cafe window", 29, 13, new double[][] {
+            // straight in through the inn's open door, across its parlour
+            inn != null ? door("cafe window", 29, inn) : shot("cafe window", 29, 13, new double[][] {
                 {0, 1.0, 2.3, -8.0, 0.4, 2.2, -22.5}, {6, 1.0, 2.5, -12.2, 0.2, 2.4, -22.5}, {13, 0.9, 2.6, -16.6,
                     -0.2, 2.5, -22.5}})),
             List.of(new double[] {0, 12.7, 0.00025, 0, 0, 0, 0, 0, 0}, new double[] {29, 13.2, 0.00025, 0, 0, 0, 0, 0,
@@ -184,15 +208,74 @@ public final class TourScript {
             }));
     }
 
-    /** A shot in the village from keys of (t, x, h, z, tx, th, tz) about the square: heights above the ground. */
+    /**
+     * A shot in the village from keys of (t, x, h, z, tx, th, tz) in the street's frame (x across it, z along it from
+     * the square's centre): heights above the ground.
+     */
     private Shot shot(String name, double start, double duration, double[][] keys) {
         CameraSpline spline = new CameraSpline(true);
+        double[] eye = new double[2];
+        double[] target = new double[2];
         for (double[] k : keys) {
-            double x = ox + k[1];
-            double z = oz + k[3];
-            double tx = ox + k[4];
-            double tz = oz + k[6];
-            spline.key(k[0], x, ground.height(x, z) + k[2], z, tx, ground.height(tx, tz) + k[5], tz);
+            double h = k[2];
+            onStreet(k[1], k[3], eye);
+            if (blocked.test(eye[0], eye[1])) {
+                onStreet(0, k[3], eye);
+                if (blocked.test(eye[0], eye[1])) {
+                    h += 14;
+                }
+            }
+            onStreet(k[4], k[6], target);
+            spline.key(k[0], eye[0], ground.height(eye[0], eye[1]) + h, eye[1], target[0],
+                ground.height(target[0], target[1]) + k[5], target[1]);
+        }
+        return new Shot(name, start, spline);
+    }
+
+    /** The world point {@code across} metres beside the street {@code along} metres from the square, into out. */
+    public void onStreet(double across, double along, double[] out) {
+        int n = street.length / 2;
+        double left = along;
+        int i = 0;
+        // the segment the distance falls in (before the first: extended back; past the last: extended on)
+        while (i < n - 2) {
+            double l = Math.sqrt(sq(street[2 * i + 2] - street[2 * i]) + sq(street[2 * i + 3] - street[2 * i + 1]));
+            if (left <= l || along < 0) {
+                break;
+            }
+            left -= l;
+            i++;
+        }
+        double dx = street[2 * i + 2] - street[2 * i];
+        double dz = street[2 * i + 3] - street[2 * i + 1];
+        double l = Math.max(Math.sqrt(dx * dx + dz * dz), 1e-9);
+        dx /= l;
+        dz /= l;
+        // across: to the right of the way south (east where it runs south)
+        out[0] = street[2 * i] + dx * left + dz * across;
+        out[1] = street[2 * i + 1] + dz * left - dx * across;
+    }
+
+    private static double sq(double v) {
+        return v * v;
+    }
+
+    /** Walking in through a door at (x, z) facing (dx, dz): from 9 m out to 4.5 m in, at eye height. */
+    private Shot door(String name, double start, double[] inn) {
+        CameraSpline spline = new CameraSpline(true);
+        double x = inn[0];
+        double z = inn[1];
+        double dx = inn[2];
+        double dz = inn[3];
+        double floor = inn.length > 4 ? inn[4] : ground.height(x, z);
+        double[][] keys = {{0, 9, 1.7}, {6, 3.5, 1.65}, {13, -4.5, 1.6}};
+        for (double[] k : keys) {
+            double ex = x + dx * k[1];
+            double ez = z + dz * k[1];
+            double ey = Math.max(ground.height(ex, ez), k[1] < 0.5 ? floor : -1e9) + k[2];
+            double tx = x - dx * 12;
+            double tz = z - dz * 12;
+            spline.key(k[0], ex, ey, ez, tx, floor + 1.5, tz);
         }
         return new Shot(name, start, spline);
     }
@@ -208,6 +291,17 @@ public final class TourScript {
             spline.key(k[0], k[1], ground.height(k[1], k[3]) + k[2], k[3], k[4], ty, k[6]);
         }
         return new Shot(name, start, spline);
+    }
+
+    /**
+     * Keeps the village's shots' eyes off what {@code test} says is a building (or beside one): an eye there moves
+     * onto the street's middle, or, if that is too, above the roofs. Remakes the segments.
+     */
+    public TourScript clear(java.util.function.BiPredicate<Double, Double> test) {
+        blocked = test;
+        segments.clear();
+        build();
+        return this;
     }
 
     public List<Segment> segments() {

@@ -6,6 +6,15 @@ import com.truesim.engine.graph.ViewPort;
 import com.truesim.engine.render.Camera;
 import com.truesim.engine.render.SceneView;
 import com.truesim.engine.vulkan.VulkanDevice;
+import com.truesim.common.procedural.assets.SettlementSettings;
+import com.truesim.common.procedural.ecology.AlpineSpecies;
+import com.truesim.common.procedural.ecology.Ecology;
+import com.truesim.common.procedural.ecology.EcologyParameters;
+import com.truesim.common.procedural.ecology.EcologyTerrain;
+import com.truesim.common.procedural.ecology.terrain.TerrainEcology;
+import com.truesim.common.procedural.settlement.Settlement;
+import com.truesim.common.procedural.settlement.Settlements;
+import com.truesim.samples.showcase.assets.NamedMaterials;
 import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.samples.showcase.assets.Surfaces;
 import com.truesim.samples.showcase.day.DayDriver;
@@ -57,18 +66,30 @@ public final class ShowcaseWorld implements AutoCloseable {
         site = assets.terrain() ? site(assets) : null;
         ground = site != null ? new TerrainGround(site, graph.settings()) : new ValleyGround();
         renderer = new ShowcaseRenderer(device, graph, assets, ground);
-        // in Lauterbrunnen the square lies on the meadow west of the Lütschine, below the Staubbach falls
-        layout = site != null ? new VillageLayout(VILLAGE_X, VILLAGE_Z, ground) : new VillageLayout(0, 0, ground);
+        // the ecology over the terrain (or the valley made from functions, 800 m up), and the village's plan on it:
+        // common-procedural's settlement, its square on the meadow west of the Lütschine below the Staubbach falls
+        long start = System.nanoTime();
+        EcologyTerrain terrain = ground instanceof TerrainGround t ? TerrainEcology.of(t.surface(), 2)
+            : (x, z) -> ground.height(x, z) + 800;
+        Ecology ecology = new Ecology(terrain, EcologyParameters.ALPS.withSeed(7)
+            .withLandUse(EcologyParameters.LandUse.MEADOWS), AlpineSpecies.ALL);
+        Settlement plan = Settlements.plan(SettlementSettings.parameters(graph.settings()), ecology,
+            site != null ? VILLAGE_X : 0, site != null ? VILLAGE_Z : 0, 7);
+        layout = new VillageLayout(plan, ground);
+        System.out.printf("Village: %d buildings, %d roads, %d props, %d fences planned and built in %.1f s%n",
+            layout.buildings().size(), plan.roads().size(), layout.props().size(), layout.fences().size(),
+            (System.nanoTime() - start) / 1e9);
         Surfaces surfaces = new Surfaces(assets);
-        village = new Village(renderer, ground, layout, surfaces, site);
+        NamedMaterials named = new NamedMaterials(assets);
+        Path cache = Path.of(graph.settings().get(ShowcaseSettings.PROCEDURAL));
+        village = new Village(renderer, ground, layout, surfaces, site, named, cache);
         // the particles' textures, held and loaded before the first fire
         for (AssetRef<TextureData> ref : List.of(FxTextures.FLAME, FxTextures.GLOW, FxTextures.EMBER, FxTextures.SMOKE,
             FxTextures.SMOKE_NORMALS)) {
             assets.resources().hold(ref);
         }
         // the valley's grass, trees, shrubs and flowers, where the ecology puts them
-        flora = new Flora(renderer, ground, layout, ground instanceof TerrainGround t ? t.surface() : null,
-            Path.of(graph.settings().get(ShowcaseSettings.PROCEDURAL)));
+        flora = new Flora(renderer, ground, layout, ecology, named, cache);
         flora.hold();
         village.awaitModels(Duration.ofMinutes(3));
         long deadline = System.nanoTime() + Duration.ofMinutes(5).toNanos();
@@ -136,6 +157,12 @@ public final class ShowcaseWorld implements AutoCloseable {
 
     public Ground ground() {
         return ground;
+    }
+
+    /** The tour through this world: the village's shots along its main street, the café's through the inn's door. */
+    public com.truesim.samples.showcase.tour.TourScript tour() {
+        return new com.truesim.samples.showcase.tour.TourScript(ground, layout.originX(), layout.originZ(),
+            site != null, layout.streetSouth(), layout.innDoor()).clear((x, z) -> layout.near(x, z, 1.5) != null);
     }
 
     public Flora flora() {

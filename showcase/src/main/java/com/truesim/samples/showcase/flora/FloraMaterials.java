@@ -5,10 +5,10 @@ import com.truesim.common.procedural.assets.ProceduralAssets;
 import com.truesim.common.procedural.assets.Recipe;
 import com.truesim.common.procedural.tree.Foliage;
 import com.truesim.common.procedural.tree.TreeSpecies;
+import com.truesim.samples.showcase.assets.NamedMaterials;
 import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.scene.assets.AssetRef;
 import com.truesim.scene.assets.Generator;
-import com.truesim.scene.assets.PathAssets;
 import com.truesim.scene.render.MaterialData;
 import com.truesim.scene.render.RenderAssets;
 import com.truesim.scene.render.TextureData;
@@ -20,17 +20,14 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The materials of common-procedural's trees, shrubs and flowers, which its recipes name by path: a mount of their own
- * ({@code flora://}) serving materials made here in code, through an importer of {@code .mat} paths. Bark is Poly
+ * The materials of common-procedural's trees, shrubs and flowers, which its recipes name by path (made in code and
+ * named, {@link NamedMaterials}). Bark is Poly
  * Haven's (pine bark on the conifers, brown bark on the broadleaves, willow bark by the water); the leaf and needle
  * atlases are drawn here (the generators lay cards out on a 2 x 2 atlas of the seasons, which no scan provides), masked
  * and two-sided; flowers, fruits, cones and the herbs' foliage take each recipe's palette ({@code #palette}). The
@@ -38,29 +35,18 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class FloraMaterials {
 
-    /** The mount. */
-    public static final String MOUNT = "flora";
-
     private static final int TILE = 256;
 
-    private final Map<String, MaterialData> materials = new ConcurrentHashMap<>();
+    private final NamedMaterials named;
     private final ShowcaseAssets assets;
     private final ProceduralAssets procedural;
     private final Generator<Recipe, TextureData> palettes;
 
-    public FloraMaterials(ShowcaseAssets assets, ProceduralAssets procedural) {
+    public FloraMaterials(ShowcaseAssets assets, NamedMaterials named, ProceduralAssets procedural) {
         this.assets = assets;
+        this.named = named;
         this.procedural = procedural;
         palettes = (recipe, seed) -> procedural.palette(recipe);
-        PathAssets paths = assets.paths();
-        paths.mounts().add(MOUNT, path -> materials.containsKey(path) ? new ByteArrayInputStream(new byte[0]) : null);
-        paths.importers().add(RenderAssets.MATERIAL, "mat", input -> {
-            MaterialData m = materials.get(input.path().path());
-            if (m == null) {
-                throw new IllegalArgumentException("No flora material " + input.path());
-            }
-            return m;
-        });
     }
 
     /** The material slots of a tree recipe of {@code species} on {@code day}: bark, leaves, attachments. */
@@ -79,8 +65,7 @@ public final class FloraMaterials {
     }
 
     private String put(String path, MaterialData material) {
-        materials.putIfAbsent(path, material);
-        return MOUNT + "://" + path;
+        return named.name("flora/" + path, material);
     }
 
     /** The scan of bark for {@code species}. */

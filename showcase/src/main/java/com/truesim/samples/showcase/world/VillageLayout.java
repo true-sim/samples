@@ -1,30 +1,55 @@
 package com.truesim.samples.showcase.world;
 
 import com.truesim.common.math.Maths;
-import com.truesim.samples.showcase.world.Buildings.Kind;
-import com.truesim.samples.showcase.world.Buildings.Spec;
+import com.truesim.common.math.Vec3;
+import com.truesim.common.procedural.building.Anchor;
+import com.truesim.common.procedural.building.BuildingKind;
+import com.truesim.common.procedural.building.BuildingSpec;
+import com.truesim.common.procedural.building.Buildings;
+import com.truesim.common.procedural.building.Footprint;
+import com.truesim.common.procedural.settlement.PropKind;
+import com.truesim.common.procedural.settlement.RoadKind;
+import com.truesim.common.procedural.settlement.Settlement;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.SplittableRandom;
+import java.util.stream.IntStream;
 
 /**
- * Where everything in the village is, as data: buildings, Poly Haven's props, lamps, paths, fences and rocks (the
- * trees, shrubs and flowers are the ecology's: {@code Flora}). Positions are on the ground plan only (x east, z south); heights come from the {@link Ground} when
- * things are placed, so the same plan stands on the temporary valley and on effects-terrain's elevation data.
+ * Where everything in the village is, as data, from common-procedural's settlement plan ({@link Settlement}: roads
+ * by least-cost paths over the terrain, the square, plots, buildings, props, lamps, fences): the buildings generated
+ * on the ground by its buildings generator (chalets, farmhouses, hay barns, the inn on the square's sunny side, the
+ * church across it), Poly Haven's props at the plan's anchors and the buildings' fittings (benches, the inn's terrace
+ * tables, tables and chairs in its parlour, cabinets and armchairs in the houses' rooms), the street lamps, the fences'
+ * lines. The trees, shrubs and flowers are the ecology's ({@code Flora}), kept off what the plan clears.
  *
- * <p>The plan: a cobbled square at the origin; the café on its north side facing the square (south, the sun), the
- * church east of it, its bell tower at the square's corner; chalets on the square's west side and along the street
- * running south through the meadow and north up the valley; farmhouses scattered on the slopes; wooden fences along
- * the pastures, mossy rocks at the forest's edge.
+ * <p>Positions are on the ground plan (x east, z south); a prop in a building ({@code inside}) is in its frame (x
+ * across its front, z towards its front, y up from its ground floor).
  */
 public final class VillageLayout {
 
-    /** The square's half extents (x, z), metres. */
-    public static final double SQUARE_X = 17;
-    public static final double SQUARE_Z = 13;
+    /**
+     * A building: its name, its generated meshes and fittings ({@code model}), where its frame stands (x, z, turned by
+     * {@code yaw}: its front faces (sin yaw, cos yaw)), whether its rooms are lit and its hearth burns.
+     */
+    public record Building(String name, com.truesim.common.procedural.building.Building model, double x, double z,
+        double yaw, boolean lit, boolean fire) {
 
-    /** A building: its spec, ground plan position and turn (radians, about up; 0: its front faces +z, south). */
-    public record Building(String name, Spec spec, double x, double z, double yaw, boolean lit, boolean fire) {
+        public BuildingKind kind() {
+            return model.spec().kind();
+        }
+
+        public double width() {
+            return model.spec().footprint().width();
+        }
+
+        public double depth() {
+            return model.spec().footprint().depth();
+        }
+
+        /** The ground floor's height. */
+        public double floor() {
+            return model.floor();
+        }
     }
 
     /**
@@ -34,196 +59,190 @@ public final class VillageLayout {
     public record Prop(String model, double x, double y, double z, double yaw, double scale, String inside) {
     }
 
-    /** A street lamp: a post on the ground at (x, z). */
+    /** A street lamp: a post on the ground at (x, z), turned to its road. */
     public record Lamp(double x, double z, double yaw) {
     }
 
-    /** A fence along a line, posts every 2.4 m. */
-    public record Fence(double x0, double z0, double x1, double z1) {
+    /** A fence along a line of x, z pairs, of the plan's kind (a garden's, a pasture's), with its seed. */
+    public record Fence(Settlement.FenceKind kind, double[] line, long seed) {
+
+        public double x0() {
+            return line[0];
+        }
+
+        public double z0() {
+            return line[1];
+        }
     }
 
+    /** Every Poly Haven model the village may draw (the props' and the furniture's, the street lamps). */
+    public static final java.util.Set<String> MODELS = java.util.Set.of("painted_wooden_bench",
+        "outdoor_table_chair_set_01", "planter_box_01", "wine_barrel_01", "wooden_crate_01", "rock_moss_set_01",
+        "boulder_01", "tree_stump_01", "round_wooden_table_01", "Lantern_01", "painted_wooden_chair_02",
+        "painted_wooden_cabinet", "wooden_display_shelves_01", "wine_bottles_01", "ArmChair_01", "Chandelier_01",
+        "street_lamp_01");
+
+    private final Settlement settlement;
     private final List<Building> buildings = new ArrayList<>();
     private final List<Prop> props = new ArrayList<>();
     private final List<Lamp> lamps = new ArrayList<>();
     private final List<Fence> fences = new ArrayList<>();
-    private final List<double[]> road = new ArrayList<>();
-    private final double originX;
-    private final double originZ;
 
-    /** The plan about the origin, on flat ground (the tests). */
-    public VillageLayout() {
-        this(0, 0, null);
-    }
-
-    /**
-     * The plan with its square at ({@code originX}, {@code originZ}) of the world; rocks kept off ground steeper than
-     * they would lie on ({@code ground}, null: all kept).
-     */
-    public VillageLayout(double originX, double originZ, Ground ground) {
-        this.originX = originX;
-        this.originZ = originZ;
-        double q = Math.PI / 2;
-        // The square's buildings
-        building("cafe", new Spec(Kind.CAFE, 14, 9.5, 3.4, 2.9, 24, 11), 1, -SQUARE_Z - 5.3, 0, true, true);
-        building("church", new Spec(Kind.CHURCH, 10.5, 22, 9, 0, 42, 3), SQUARE_X + 12, 1, -q, true, false);
-        building("square west 1", chalet(9.5, 11.5, 21), -SQUARE_X - 7, -5.5, q, true, true);
-        building("square west 2", chalet(9, 10.5, 22), -SQUARE_X - 6.5, 9.5, q, true, true);
-        building("square south east", chalet(10, 12, 23), 12.5, SQUARE_Z + 9, Math.PI, true, true);
-        // along the street south through the meadow (x 0, z +), facing it
-        building("street 1", chalet(9, 11, 31), -12.5, 38, q, true, true);
-        building("street 2", chalet(10, 12, 32), 13, 50, -q, true, false);
-        building("street 3", chalet(9.5, 11, 33), -13.5, 66, q, false, true);
-        building("street 4", chalet(9, 10, 34), 14, 82, -q, true, true);
-        // north up the valley, behind the café
-        building("north 1", chalet(10, 12, 41), -14, -42, q, true, true);
-        building("north 2", chalet(9, 11, 42), 16, -48, -q, false, true);
-        building("north 3", chalet(9.5, 11.5, 43), -15, -64, q, true, false);
-        // farmhouses on the slopes, their fronts to the south
-        building("farm west", chalet(11, 13, 51), -78, 42, 0.15, true, true);
-        building("farm east", chalet(10.5, 12, 52), 74, 64, -0.25, false, true);
-        building("farm north west", chalet(10, 12, 53), -92, -58, 0.3, true, true);
-        building("farm north east", chalet(11, 12.5, 54), 88, -35, -0.1, false, true);
-        building("hut", chalet(7, 8, 55), -48, 128, 0.05, false, false);
-
-        // the road: from the meadow in the south, across the square, up the valley north
-        for (double[] p : new double[][] {{-6, 220}, {-3, 150}, {1, 100}, {0, 60}, {0, SQUARE_Z}}) {
-            road.add(p);
-        }
-        // lamps around the square and along the street
-        for (double[] p : new double[][] {{-SQUARE_X + 1.2, -SQUARE_Z + 1.2}, {SQUARE_X - 1.2, -SQUARE_Z + 1.2},
-            {-SQUARE_X + 1.2, SQUARE_Z - 1.2}, {SQUARE_X - 1.2, SQUARE_Z - 1.2}, {-SQUARE_X + 1.2, 1},
-            {-3.6, 30}, {3.6, 46}, {-3.6, 62}, {3.4, 80}, {-6, -SQUARE_Z - 14}, {6, -38}}) {
-            lamps.add(new Lamp(p[0], p[1], 0));
-        }
-
-        // the café: outside tables on the square, inside tables, the bar's shelves and bottles, the mirror, the
-        // chandelier, plants at the door
-        for (int i = 0; i < 3; i++) {
-            props.add(new Prop("outdoor_table_chair_set_01", -7 + 6.5 * i, 0, -SQUARE_Z + 2.6, 0.3 * i - 0.2, 1,
-                null));
-        }
-        // on the square before the café's front (its plinth stands above the sloping square)
-        double front = -SQUARE_Z - 5.3 + 9.5 / 2 + 0.55;
-        props.add(new Prop("potted_plant_01", 1 - 1.3, 0, front, 0, 1, null));
-        props.add(new Prop("potted_plant_01", 1 + 1.3, 0, front, 0.8, 1, null));
-        props.add(new Prop("planter_box_01", 1 - 5.6, 0, front, 0, 1.2, null));
-        props.add(new Prop("planter_box_01", 1 + 4.9, 0, front, 0, 1.2, null));
-        for (int i = 0; i < 3; i++) {
-            double x = -4.2 + 4.2 * i;
-            props.add(new Prop("round_wooden_table_01", x, 0, 0.6, 0, 0.75, "cafe"));
-            props.add(new Prop("painted_wooden_chair_02", x - 0.95, 0, 0.6, q, 0.8, "cafe"));
-            props.add(new Prop("painted_wooden_chair_02", x + 0.95, 0, 0.6, -q, 0.8, "cafe"));
-            props.add(new Prop("Lantern_01", x + 0.1, 0.76, 0.5, 0, 1, "cafe"));
-        }
-        props.add(new Prop("wooden_display_shelves_01", -4.5, 0, -4.1, 0, 1.2, "cafe"));
-        props.add(new Prop("wooden_display_shelves_01", 4.5, 0, -4.1, 0, 1.2, "cafe"));
-        props.add(new Prop("wine_bottles_01", -4.5, 1.05, -4.1, 0, 1.1, "cafe"));
-        props.add(new Prop("wine_bottles_01", 4.5, 1.05, -4.1, 0, 1.1, "cafe"));
-        props.add(new Prop("wine_bottles_01", 4.5, 1.5, -4.1, 0, 1.1, "cafe"));
-        props.add(new Prop("ornate_mirror_01", -1.7, 1.2, -4.27, 0, 2.2, "cafe"));
-        props.add(new Prop("Chandelier_01", 0, 2.55, 0, 0, 1, "cafe"));
-        props.add(new Prop("wine_barrel_01", 6.0, 0, -3.6, 0, 1, "cafe"));
-
-        // the chalets' rooms: an armchair at the hearth, a cabinet, a lantern on it
-        for (Building b : buildings) {
-            if (b.spec().kind() != Kind.CHALET || !b.lit()) {
-                continue;
-            }
-            Buildings.Fittings f = Buildings.fittings(b.spec());
-            double hw = b.spec().width() / 2;
-            double hd = b.spec().depth() / 2;
-            if (b.fire()) {
-                props.add(new Prop("ArmChair_01", f.fire()[0] - 1.2, 0, f.fire()[2] + 2.2, Math.PI - 0.5, 1,
-                    b.name()));
-            }
-            props.add(new Prop("painted_wooden_cabinet", -hw + 0.9, 0, -hd + 1.6, q, 1, b.name()));
-            props.add(new Prop("Lantern_01", -hw + 0.9, 1.18, -hd + 1.4, 0, 1, b.name()));
-        }
-        // outside the houses: barrels, crates, buckets, a bench by the door; around the square, benches
-        SplittableRandom random = new SplittableRandom(5);
-        for (Building b : buildings) {
-            if (b.spec().kind() != Kind.CHALET) {
-                continue;
-            }
-            Buildings.Fittings f = Buildings.fittings(b.spec());
-            double hd = b.spec().depth() / 2;
-            props.add(new Prop("painted_wooden_bench", f.door()[0] + 1.9, 0, hd + 0.45, Math.PI, 1, b.name()));
-            if (random.nextBoolean()) {
-                props.add(new Prop("wine_barrel_01", b.spec().width() / 2 + 0.6, 0, hd - 1.2, 0, 1, b.name()));
-                props.add(new Prop("wooden_bucket_01", b.spec().width() / 2 + 0.55, 0, hd - 2.2, 0, 1, b.name()));
-            } else {
-                props.add(new Prop("wooden_crate_01", -b.spec().width() / 2 - 0.6, 0, hd - 1.5, q, 1, b.name()));
-                props.add(new Prop("wooden_crate_01", -b.spec().width() / 2 - 0.62, 0.35, hd - 1.45, q + 0.2, 1,
-                    b.name()));
-            }
-        }
-        props.add(new Prop("painted_wooden_bench", -SQUARE_X + 1.5, 0, -4, q, 1.1, null));
-        props.add(new Prop("painted_wooden_bench", -SQUARE_X + 1.5, 0, 6, q, 1.1, null));
-        props.add(new Prop("painted_wooden_bench", 4, 0, SQUARE_Z - 1.2, Math.PI, 1.1, null));
-        props.add(new Prop("wine_barrel_01", SQUARE_X - 2.5, 0, -6, 0.4, 1, null));
-        props.add(new Prop("wooden_crate_01", SQUARE_X - 2.6, 0, -4.9, 0.1, 1, null));
-
-        // fences round the pastures south of the village
-        fences.add(new Fence(6, 30, 6, 120));
-        fences.add(new Fence(6, 120, 70, 140));
-        fences.add(new Fence(-7, 95, -7, 170));
-        fences.add(new Fence(-7, 170, -60, 185));
-        fences.add(new Fence(30, 20, 60, 30));
-        // rocks on the meadows and at the forest's edge
-        SplittableRandom rocks = new SplittableRandom(17);
-        for (int i = 0; i < 26; i++) {
-            double x = (rocks.nextBoolean() ? 1 : -1) * rocks.nextDouble(40, 190);
-            double z = rocks.nextDouble(-200, 240);
-            String model = switch (i % 4) {
-                case 0 -> "rock_moss_set_01";
-                case 1 -> "rock_moss_set_02";
-                case 2 -> "boulder_01";
-                default -> "tree_stump_01";
+    /** The village of {@code settlement}, its buildings generated on {@code ground}. */
+    public VillageLayout(Settlement settlement, Ground ground) {
+        this.settlement = settlement;
+        List<Settlement.Building> planned = settlement.buildings();
+        // the buildings, generated on all cores (some 30,000 triangles each at full detail)
+        com.truesim.common.procedural.building.Building[] made =
+            new com.truesim.common.procedural.building.Building[planned.size()];
+        IntStream.range(0, planned.size()).parallel().forEach(i -> {
+            Settlement.Building b = planned.get(i);
+            BuildingSpec spec = BuildingSpec.of(kind(b.spec().kind()), new Footprint(b.x(), b.z(), b.yaw(),
+                b.spec().width(), b.spec().depth()), b.spec().seed()).withFloors(Math.max(1, b.spec().floors()));
+            made[i] = Buildings.generate(spec, ground::height);
+        });
+        int house = 0;
+        for (int i = 0; i < planned.size(); i++) {
+            Settlement.Building b = planned.get(i);
+            BuildingKind kind = made[i].spec().kind();
+            String name = switch (kind) {
+                case INN -> "cafe";
+                case CHURCH -> "church";
+                default -> kind.id() + " " + (++house);
             };
-            double scale = model.startsWith("rock_moss") ? rocks.nextDouble(0.3, 0.7) : rocks.nextDouble(0.8, 2.2);
-            if (gentle(ground, x, z, 30)) {
-                props.add(new Prop(model, x, -0.15 * scale, z, rocks.nextDouble(0, 2 * Math.PI), scale, null));
+            boolean dwelling = kind == BuildingKind.CHALET || kind == BuildingKind.FARMHOUSE
+                || kind == BuildingKind.INN;
+            long seed = b.spec().seed();
+            buildings.add(new Building(name, made[i], b.x(), b.z(), b.yaw(),
+                kind == BuildingKind.CHURCH || kind == BuildingKind.INN || dwelling && Math.floorMod(seed, 4) != 0,
+                dwelling && Math.floorMod(seed, 3) != 0));
+        }
+        for (Building b : buildings) {
+            furnish(b);
+        }
+        for (Settlement.Prop p : settlement.props()) {
+            String model = model(p.kind());
+            if (model != null) {
+                double scale = switch (p.kind()) {
+                    case ROCK -> 0.4 + 0.3 * unit(p.x(), p.z());
+                    case BOULDER -> 0.9 + 1.2 * unit(p.x(), p.z());
+                    case STUMP -> 1 + unit(p.x(), p.z());
+                    default -> 1;
+                };
+                double lift = p.kind() == PropKind.ROCK || p.kind() == PropKind.BOULDER ? -0.15 * scale : 0;
+                props.add(new Prop(model, p.x(), lift, p.z(), p.yaw(), scale, null));
             }
         }
-        // everything on the ground plan moved to the square's place in the world
-        if (originX != 0 || originZ != 0) {
-            buildings.replaceAll(b -> new Building(b.name(), b.spec(), b.x() + originX, b.z() + originZ, b.yaw(),
-                b.lit(), b.fire()));
-            props.replaceAll(p -> p.inside() != null && !"tree".equals(p.inside()) ? p : new Prop(p.model(),
-                p.x() + originX, p.y(), p.z() + originZ, p.yaw(), p.scale(), p.inside()));
-            lamps.replaceAll(l -> new Lamp(l.x() + originX, l.z() + originZ, l.yaw()));
-            fences.replaceAll(f -> new Fence(f.x0() + originX, f.z0() + originZ, f.x1() + originX, f.z1() + originZ));
-            road.replaceAll(p -> new double[] {p[0] + originX, p[1] + originZ});
+        for (Settlement.Lamp l : settlement.lamps()) {
+            lamps.add(new Lamp(l.x(), l.z(), l.yaw()));
+        }
+        long n = 0;
+        for (Settlement.Fence f : settlement.fences()) {
+            fences.add(new Fence(f.kind(), f.line(), settlement.seed() * 1000 + n++));
         }
     }
 
-    /** Whether the ground at the plan's ({@code x}, {@code z}) is no steeper than {@code degrees}. */
-    private boolean gentle(Ground ground, double x, double z, double degrees) {
-        if (ground == null) {
-            return true;
-        }
-        double[] n = new double[3];
-        ground.normal(x + originX, z + originZ, n);
-        return n[1] >= Maths.cos(Maths.toRadians(degrees));
+    /** The plan's kind as the buildings generator's: houses are chalets (their spec to be unified). */
+    static BuildingKind kind(com.truesim.common.procedural.settlement.BuildingKind kind) {
+        return switch (kind) {
+            case CHURCH -> BuildingKind.CHURCH;
+            case INN -> BuildingKind.INN;
+            case HOUSE -> BuildingKind.CHALET;
+            case FARMHOUSE -> BuildingKind.FARMHOUSE;
+            case HAY_BARN -> BuildingKind.HAY_BARN;
+        };
     }
 
-    /** Where the square lies in the world. */
+    /** Poly Haven's model for a plan's prop, or null (none drawn yet: fountains, troughs, signposts, woodpiles). */
+    static String model(PropKind kind) {
+        return switch (kind) {
+            case BENCH -> "painted_wooden_bench";
+            case TABLE_SET -> "outdoor_table_chair_set_01";
+            case PLANTER -> "planter_box_01";
+            case BARREL -> "wine_barrel_01";
+            case CRATE -> "wooden_crate_01";
+            case ROCK -> "rock_moss_set_01";
+            case BOULDER -> "boulder_01";
+            case STUMP -> "tree_stump_01";
+            default -> null;
+        };
+    }
+
+    /** The building's rooms furnished at its fittings' anchors with Poly Haven's furniture. */
+    private void furnish(Building b) {
+        boolean inn = b.kind() == BuildingKind.INN;
+        for (Anchor a : b.model().fittings().anchors()) {
+            Vec3 p = a.position();
+            double yaw = a.yaw();
+            switch (a.kind()) {
+                case TABLE -> {
+                    props.add(new Prop("round_wooden_table_01", p.x(), p.y(), p.z(), yaw, 0.75, b.name()));
+                    if (inn) {
+                        props.add(new Prop("Lantern_01", p.x() + 0.1, p.y() + 0.76, p.z() - 0.1, 0, 1, b.name()));
+                    }
+                }
+                case CHAIR -> props.add(new Prop("painted_wooden_chair_02", p.x(), p.y(), p.z(), yaw, 0.8, b.name()));
+                case CABINET -> {
+                    props.add(new Prop("painted_wooden_cabinet", p.x(), p.y(), p.z(), yaw, 1, b.name()));
+                    props.add(new Prop("Lantern_01", p.x(), p.y() + 1.18, p.z(), 0, 1, b.name()));
+                }
+                case BAR -> {
+                    props.add(new Prop("wooden_display_shelves_01", p.x(), p.y(), p.z(), yaw, 1.2, b.name()));
+                    props.add(new Prop("wine_bottles_01", p.x(), p.y() + 1.05, p.z(), yaw, 1.1, b.name()));
+                    props.add(new Prop("wine_barrel_01", p.x() + 1.6, p.y(), p.z(), yaw, 1, b.name()));
+                }
+                case TERRACE_TABLE -> props.add(new Prop("outdoor_table_chair_set_01", p.x(), p.y(), p.z(), yaw, 1,
+                    b.name()));
+                case BENCH -> {
+                    if (a.room() < 0) {
+                        props.add(new Prop("painted_wooden_bench", p.x(), p.y(), p.z(), yaw, 1, b.name()));
+                    }
+                }
+                case FIRE -> {
+                    if (b.lit() && !inn && b.kind() != BuildingKind.CHURCH) {
+                        // an armchair before the hearth, turned to it
+                        double c = Maths.cos(yaw);
+                        double s = Maths.sin(yaw);
+                        props.add(new Prop("ArmChair_01", p.x() + 2.0 * s - 0.8 * c, p.y() - 0.15,
+                            p.z() + 2.0 * c + 0.8 * s, yaw + Math.PI - 0.4, 1, b.name()));
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        if (inn) {
+            for (Anchor a : b.model().fittings().anchors()) {
+                if (a.kind() == Anchor.Kind.CEILING_LAMP && a.room() >= 0) {
+                    Vec3 p = a.position();
+                    props.add(new Prop("Chandelier_01", p.x(), p.y() - 0.05, p.z(), 0, 1, b.name()));
+                    break;
+                }
+            }
+        }
+    }
+
+    private static double sq(double v) {
+        return v * v;
+    }
+
+    private static double unit(double x, double z) {
+        long h = Double.doubleToLongBits(x * 31.7 + z * 17.3) * 0x9E3779B97F4A7C15L;
+        return ((h >>> 11) & 0xffff) / 65535.0;
+    }
+
+    /** The plan. */
+    public Settlement settlement() {
+        return settlement;
+    }
+
+    /** Where the square lies in the world: its centre. */
     public double originX() {
-        return originX;
+        return settlement.square().x();
     }
 
     public double originZ() {
-        return originZ;
-    }
-
-    private static Spec chalet(double width, double depth, long seed) {
-        SplittableRandom random = new SplittableRandom(seed);
-        return new Spec(Kind.CHALET, width, depth, 2.9 + random.nextDouble(0, 0.25), 2.7 + random.nextDouble(0, 0.3),
-            22 + random.nextDouble(0, 6), seed);
-    }
-
-    private void building(String name, Spec spec, double x, double z, double yaw, boolean lit, boolean fire) {
-        buildings.add(new Building(name, spec, x, z, yaw, lit, fire));
+        return settlement.square().z();
     }
 
     public List<Building> buildings() {
@@ -242,9 +261,32 @@ public final class VillageLayout {
         return fences;
     }
 
-    /** The road's centre line, ground plan points from the south. */
-    public List<double[]> road() {
-        return road;
+    /** The main road's centre line south of the square, from the square outwards: x, z pairs. */
+    public double[] streetSouth() {
+        double[] best = null;
+        double bestZ = -Double.MAX_VALUE;
+        for (Settlement.Road r : settlement.roads()) {
+            if (r.kind() != RoadKind.MAIN || r.count() < 2) {
+                continue;
+            }
+            int n = r.count();
+            // the end nearer the square first
+            double first = sq(r.x()[0] - originX()) + sq(r.z()[0] - originZ());
+            double last = sq(r.x()[n - 1] - originX()) + sq(r.z()[n - 1] - originZ());
+            boolean forward = first <= last;
+            double[] line = new double[2 * n];
+            for (int i = 0; i < n; i++) {
+                int k = forward ? i : n - 1 - i;
+                line[2 * i] = r.x()[k];
+                line[2 * i + 1] = r.z()[k];
+            }
+            double far = line[2 * n - 1];
+            if (far > bestZ) {
+                bestZ = far;
+                best = line;
+            }
+        }
+        return best;
     }
 
     /** The building named {@code name}, or null. */
@@ -259,6 +301,11 @@ public final class VillageLayout {
 
     /** The building whose walls stand round world ({@code x}, {@code z}), or null. */
     public Building inside(double x, double z) {
+        return near(x, z, 0);
+    }
+
+    /** The building within {@code margin} metres of whose walls (or inside) world ({@code x}, {@code z}) is, or null. */
+    public Building near(double x, double z, double margin) {
         for (Building b : buildings) {
             double c = Maths.cos(b.yaw());
             double s = Maths.sin(b.yaw());
@@ -266,11 +313,29 @@ public final class VillageLayout {
             double dz = z - b.z();
             double lx = dx * c - dz * s;
             double lz = dx * s + dz * c;
-            if (Math.abs(lx) < b.spec().width() / 2 && Math.abs(lz) < b.spec().depth() / 2) {
+            if (Math.abs(lx) < b.width() / 2 + margin && Math.abs(lz) < b.depth() / 2 + margin) {
                 return b;
             }
         }
         return null;
+    }
+
+    /** The inn's main door in the world: x, z, the way out (dx, dz), its floor's height; null without an inn. */
+    public double[] innDoor() {
+        Building inn = building("cafe");
+        if (inn == null) {
+            return null;
+        }
+        Anchor door = null;
+        for (Anchor a : inn.model().fittings().all(Anchor.Kind.DOOR)) {
+            if (door == null || a.position().z() > door.position().z()) {
+                door = a; // the front's
+            }
+        }
+        double[] at = new double[2];
+        double yaw = inn.yaw() + (door != null ? door.yaw() : 0);
+        toWorld(inn, door != null ? door.position().x() : 0, door != null ? door.position().z() : inn.depth() / 2, at);
+        return new double[] {at[0], at[1], Maths.sin(yaw), Maths.cos(yaw), inn.floor()};
     }
 
     /** The ground plan position of ({@code lx}, {@code lz}) in building {@code b}'s frame, into {@code out}. */

@@ -27,6 +27,7 @@ downloads them into a local cache. Everything else (the buildings, the ground, t
 | [plank_flooring_02](https://polyhaven.com/a/plank_flooring_02) | Plank Flooring 02 | Dario Barresi, Dimitrios Savva | texture | 2k |
 | [granite_wall](https://polyhaven.com/a/granite_wall) | Granite Wall | Dimitrios Savva | texture | 2k |
 | [rock_face_03](https://polyhaven.com/a/rock_face_03) | Rock Face 03 | Dario Barresi, Rico Cilliers | texture | 2k |
+| [roof_planks](https://polyhaven.com/a/roof_planks) | Roof Planks | Rob Tuytel | texture | 2k |
 | [pine_bark](https://polyhaven.com/a/pine_bark) | Pine Bark | Dimitrios Savva | texture | 2k |
 | [bark_brown_02](https://polyhaven.com/a/bark_brown_02) | Bark Brown 02 | Rob Tuytel | texture | 2k |
 | [bark_willow](https://polyhaven.com/a/bark_willow) | Bark Willow | Dario Barresi, Dimitrios Savva | texture | 2k |

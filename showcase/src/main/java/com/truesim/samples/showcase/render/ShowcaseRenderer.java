@@ -181,7 +181,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         lights = own(new Lights(device, 512, 32, slots));
         sun = lights.add();
         moon = lights.add();
-        lights.shadow(sun, ShadowSpec.cascades(4, quality == Quality.LOW ? 2048 : 4096, 600));
+        lights.shadow(sun, sunCascades(settings, quality));
         lights.shadow(moon, ShadowSpec.NONE);
         lightSync = new LightSync(scene, lights);
         sync = own(new SceneSync(assets.resources(), scene, gpu));
@@ -238,6 +238,15 @@ public final class ShowcaseRenderer implements AutoCloseable {
         return types.with(type, new com.truesim.effects.weather.clouds.CloudProfile(1000, 3200, 0.04, 0.55, 0.35,
             p.anvilSpread(), p.anvilStart(), 0.12, 0.75, 140, p.extinction(), p.dropletDiameter(), p.absorption(),
             false));
+    }
+
+    /**
+     * The sun's cascades: {@code showcase.shadowCascades} of them over {@code showcase.shadowDistance} metres (the
+     * valley's walls and the far meadows in shadow, not only the village), 4096 texels a side (2048 at low quality).
+     */
+    public static ShadowSpec sunCascades(EngineSettings settings, Quality quality) {
+        return ShadowSpec.cascades(settings.get(ShowcaseSettings.SHADOW_CASCADES), quality == Quality.LOW ? 2048
+            : 4096, settings.get(ShowcaseSettings.SHADOW_DISTANCE));
     }
 
     /** The preset named ({@code low}, {@code medium}, {@code high}, {@code ultra}). */

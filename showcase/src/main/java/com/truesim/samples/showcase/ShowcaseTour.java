@@ -74,8 +74,7 @@ public final class ShowcaseTour {
                 world.view(port, rig.camera());
                 SceneStats stats = new SceneStats(device, width, height);
                 port.add(stats);
-                TourScript script = new TourScript(world.ground(), world.layout().originX(), world.layout().originZ(),
-                    world.site() != null);
+                TourScript script = world.tour();
                 DayState state = new DayState();
                 double[] eye = new double[6];
                 double tourTime = 0;

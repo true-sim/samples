@@ -4,17 +4,13 @@ import com.truesim.common.math.Vec3;
 import com.truesim.common.procedural.assets.GenerationCache;
 import com.truesim.common.procedural.assets.ProceduralAssets;
 import com.truesim.common.procedural.assets.Recipe;
-import com.truesim.common.procedural.ecology.AlpineSpecies;
 import com.truesim.common.procedural.ecology.Ecology;
-import com.truesim.common.procedural.ecology.EcologyParameters;
 import com.truesim.common.procedural.ecology.EcologyTile;
 import com.truesim.common.procedural.ecology.Instances;
 import com.truesim.common.procedural.ecology.Layer;
 import com.truesim.common.procedural.ecology.Species;
-import com.truesim.common.procedural.ecology.terrain.TerrainEcology;
 import com.truesim.common.procedural.tree.Season;
 import com.truesim.common.procedural.tree.TreeSpecies;
-import com.truesim.effects.terrain.data.TerrainSurface;
 import com.truesim.effects.vegetation.GroundMap;
 import com.truesim.effects.vegetation.VegetationHooks;
 import com.truesim.effects.vegetation.materials.VegetationFieldParameters;
@@ -27,6 +23,7 @@ import com.truesim.effects.vegetation.scene.VegetationAssets;
 import com.truesim.effects.vegetation.scene.VegetationSync;
 import com.truesim.engine.render.Camera;
 import com.truesim.samples.showcase.ShowcaseSettings;
+import com.truesim.samples.showcase.assets.NamedMaterials;
 import com.truesim.samples.showcase.day.DayState;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
@@ -44,8 +41,8 @@ import java.util.Set;
 
 /**
  * The valley's vegetation, all of it through the scene: effects-vegetation's GPU grass over the meadows (a
- * {@link GrassField} standing on a {@link GroundMap} of the valley floor round the village, cleared from the square,
- * the buildings and the road), and common-procedural's trees, shrubs, dwarf shrubs and flowers where its ecology
+ * {@link GrassField} standing on a {@link GroundMap} of the valley floor round the village, cleared from what the
+ * village's plan paves or builds on), and common-procedural's trees, shrubs, dwarf shrubs and flowers where its ecology
  * puts them on Lauterbrunnen's terrain ({@link Ecology} over effects-terrain's surface, its meadows kept open on the
  * valley floor): one {@link PlantScatter} per species and variant, its plants the ecology's instances
  * ({@link PlantPlacer#instances}), swaying in the day's wind ({@link VegetationHooks}). The trees and flowers are
@@ -53,8 +50,7 @@ import java.util.Set;
  * leaves turning, larches still green.
  *
  * <p>Trees and shrubs stand on {@link #TREES} metres a side round the village, dwarf shrubs and herbs on
- * {@link #HERBS} a side, all of them always in the scene. Without the terrain (the valley made
- * from functions) a spruce forest stands on the slopes by the scatter's own rules.
+ * {@link #HERBS} a side, all of them always in the scene.
  */
 public final class Flora implements AutoCloseable {
 
@@ -76,25 +72,25 @@ public final class Flora implements AutoCloseable {
     private final GroundMap map;
     private final ProceduralAssets procedural;
     private final FloraMaterials materials;
-    private final FloraModels flora;
     private final Map<PlantScatter, List<PlantPlacement.Plant>> placements = new IdentityHashMap<>();
     private final List<AssetRef<ModelData>> models = new ArrayList<>();
     private int plants;
     private int trees;
 
     /**
-     * The vegetation of {@code layout}'s village on {@code ground}, its ecology over {@code surface} (null: the valley
-     * made from functions), generated meshes cached in {@code cache}.
+     * The vegetation of {@code layout}'s village on {@code ground} as {@code ecology} has it grow, off what the
+     * village's plan clears; generated meshes cached in {@code cache}, materials named through {@code named}.
      */
-    public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, TerrainSurface surface, Path cache) {
+    public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology,
+        NamedMaterials named, Path cache) {
         this.renderer = renderer;
         var assets = renderer.assets();
         procedural = new ProceduralAssets(assets.paths(), new GenerationCache(cache)).install();
-        materials = new FloraMaterials(assets, procedural);
-        flora = new FloraModels(procedural, assets.paths());
+        materials = new FloraMaterials(assets, named, procedural);
         double ox = layout.originX();
         double oz = layout.originZ();
-        Clearing grassGround = new Clearing(ground, layout, 0.4);
+        var plan = layout.settlement().clearing();
+        Clearing grassGround = new Clearing(ground, plan, false);
         map = GroundMap.upload(assets.resources().textures(), grassGround, ox - MAP / 2, oz - MAP / 2, MAP,
             MAP_TEXELS);
         grassGround.map(map);
@@ -113,35 +109,33 @@ public final class Flora implements AutoCloseable {
         long start = System.nanoTime();
         if (java.util.List.of(renderer.settings().get(ShowcaseSettings.SKIP).split(",")).contains("plants")) {
             System.out.println("Flora: the grass only (showcase.skip=plants)");
-        } else if (surface != null) {
-            ecology(surface, new Clearing(ground, layout, 7).core(115), new Clearing(ground, layout, 2), ox, oz);
         } else {
-            forest(ground, ox, oz);
+            // trees and shrubs off the plan's roads, square, buildings and gardens, and off the village's meadows
+            // within some 100 m of the square (the tour's paths); the flowers off what is paved or built
+            Clearing trees = new Clearing(ground, plan, true);
+            double cell = ecology.parameters().cell();
+            place(ecology, (x, z) -> trees.density(x, z) * open(x - ox, z - oz), snap(ox - TREES / 2, cell),
+                snap(oz - TREES / 2, cell), TREES, Set.of(Layer.CANOPY, Layer.SHRUB));
+            place(ecology, grassGround::density, snap(ox - HERBS / 2, cell), snap(oz - HERBS / 2, cell), HERBS,
+                Set.of(Layer.DWARF_SHRUB, Layer.HERB));
         }
         System.out.printf("Flora: %d plants (%d trees) of %d models placed in %.1f s%n", plants, trees, models.size(),
             (System.nanoTime() - start) / 1e9);
     }
 
-    /**
-     * The ecology's trees and shrubs on the terrain, off the village's {@code clearing} (its core kept open); its dwarf shrubs
-     * and flowers off the {@code herbs} clearing (the square, the buildings, the road).
-     */
-    private void ecology(TerrainSurface surface, Clearing clearing, Clearing herbs, double ox, double oz) {
-        Ecology ecology = new Ecology(TerrainEcology.of(surface, 2), EcologyParameters.ALPS.withSeed(7)
-            .withLandUse(EcologyParameters.LandUse.MEADOWS), AlpineSpecies.ALL);
-        double cell = ecology.parameters().cell();
-        place(ecology, clearing, snap(ox - TREES / 2, cell), snap(oz - TREES / 2, cell), TREES,
-            Set.of(Layer.CANOPY, Layer.SHRUB));
-        place(ecology, herbs, snap(ox - HERBS / 2, cell), snap(oz - HERBS / 2, cell), HERBS,
-            Set.of(Layer.DWARF_SHRUB, Layer.HERB));
+    /** 0 within 100 m of the square, 1 from 130 m. */
+    private static double open(double dx, double dz) {
+        double t = Math.clamp((Math.sqrt(dx * dx + dz * dz) - 100) / 30, 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private static double snap(double v, double cell) {
         return Math.floor(v / cell) * cell;
     }
 
-    /** The plants of {@code layers} in the region, by species and variant, each a scatter. */
-    private void place(Ecology ecology, Clearing clearing, double x0, double z0, double size, Set<Layer> layers) {
+    /** The plants of {@code layers} in the region where {@code keep} is half or more, a scatter per species. */
+    private void place(Ecology ecology, java.util.function.DoubleBinaryOperator keep, double x0, double z0,
+        double size, Set<Layer> layers) {
         EcologyTile tile = ecology.region(x0, z0, size, size);
         Instances instances = tile.instances();
         List<Species> species = ecology.species();
@@ -151,8 +145,8 @@ public final class Flora implements AutoCloseable {
             if (!layers.contains(s.layer()) || recipe(s.id(), 0) == null) {
                 continue;
             }
-            if (clearing.density(instances.x(i), instances.z(i)) < 0.5) {
-                continue; // the village, its road and its square, and the cliffs
+            if (keep.applyAsDouble(instances.x(i), instances.z(i)) < 0.5) {
+                continue; // the village, its roads and square, and the cliffs
             }
             int key = instances.species(i) * VARIANTS + Math.floorMod(instances.variant(i), VARIANTS);
             bySpecies.computeIfAbsent(key, k -> new ArrayList<>()).add(new PlantPlacement.Plant(instances.x(i),
@@ -162,7 +156,8 @@ public final class Flora implements AutoCloseable {
         for (Map.Entry<Integer, List<PlantPlacement.Plant>> e : bySpecies.entrySet()) {
             Species s = species.get(e.getKey() / VARIANTS);
             Recipe recipe = recipe(s.id(), e.getKey() % VARIANTS);
-            AssetRef<ModelData> model = flora.model(recipe, recipe.seed());
+            // a cluster hierarchy (common-procedural 0.4: detail by distance)
+            AssetRef<ModelData> model = procedural.model(recipe);
             boolean tree = s.layer() == Layer.CANOPY;
             // every plant always in the scene: scatters following the viewer (a radius) made the vegetation's sync
             // swap materials under instances still drawing them (true-sim/effects-vegetation#2)
@@ -175,21 +170,6 @@ public final class Flora implements AutoCloseable {
             models.add(model);
             plants += e.getValue().size();
             trees += tree ? e.getValue().size() : 0;
-        }
-    }
-
-    /** Without the terrain: spruces on the slopes by the scatter's own rules. */
-    private void forest(Ground ground, double ox, double oz) {
-        sync.placer(PlantPlacer.RULES);
-        var scene = renderer.scene();
-        for (int v = 0; v < VARIANTS; v++) {
-            Recipe recipe = recipe("spruce", v);
-            AssetRef<ModelData> model = flora.model(recipe, recipe.seed());
-            long node = scene.create();
-            scene.setTranslation(node, ox, 0, oz);
-            scene.components().set(node, PlantScatter.TYPE, new PlantScatter(model, 400, 400, 14, 0.6, 1.1, 38,
-                ground.height(ox, oz) + 8, 1e4, 31 + v, sway(recipe)));
-            models.add(model);
         }
     }
 

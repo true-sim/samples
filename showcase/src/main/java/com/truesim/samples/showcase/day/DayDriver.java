@@ -257,8 +257,7 @@ public final class DayDriver {
         }
         ShadowSpec spec = renderer.lights().shadow(renderer.sunLight());
         return spec.method() == com.truesim.scene.core.ShadowMethod.NONE
-            ? ShadowSpec.cascades(4, renderer.quality() == com.truesim.effects.atmosphere.Quality.LOW ? 2048 : 4096,
-                600) : spec;
+            ? ShowcaseRenderer.sunCascades(settings, renderer.quality()) : spec;
     }
 
     private ShadowSpec moonShadow() {

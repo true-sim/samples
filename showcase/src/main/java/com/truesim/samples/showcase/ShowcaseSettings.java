@@ -35,6 +35,11 @@ public final class ShowcaseSettings {
      */
     public static final Setting<String> SKIP = Setting.text("showcase.skip", "",
         "left out (debugging): environment, ao, ssr, gi, aerial, fog, clouds, plants");
+    /** How far the sun's shadow cascades reach, metres, and how many there are. */
+    public static final Setting<Float> SHADOW_DISTANCE = Setting.decimal("showcase.shadowDistance", 3000f, 100f,
+        50_000f, "metres the sun's shadow cascades reach");
+    public static final Setting<Integer> SHADOW_CASCADES = Setting.integer("showcase.shadowCascades", 6, 1, 8,
+        "the sun's shadow cascades");
     /** Where common-procedural keeps the trees and flowers it generated (made once, read on later runs). */
     public static final Setting<String> PROCEDURAL = Setting.text("showcase.procedural",
         System.getProperty("user.home") + "/.truesim/procedural",
@@ -78,7 +83,8 @@ public final class ShowcaseSettings {
         "measure frame times per segment of the tour (GPU timestamps)");
 
     /** Every one of them. */
-    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, SKIP, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
+    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, SKIP, SHADOW_DISTANCE,
+        SHADOW_CASCADES, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
         EVERY, PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
 
     private ShowcaseSettings() {

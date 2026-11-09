@@ -2,6 +2,22 @@ package com.truesim.samples.showcase.world;
 
 import com.truesim.common.math.Maths;
 import com.truesim.common.math.Vec3;
+import com.truesim.common.procedural.assets.BuildingAssets;
+import com.truesim.common.procedural.assets.FenceAssets;
+import com.truesim.common.procedural.assets.GenerationCache;
+import com.truesim.common.procedural.assets.SceneMeshes;
+import com.truesim.common.procedural.building.Anchor;
+import com.truesim.common.procedural.building.BuildingKind;
+import com.truesim.common.procedural.building.BuildingSlot;
+import com.truesim.common.procedural.building.Opening;
+import com.truesim.common.procedural.building.Room;
+import com.truesim.common.procedural.fence.FenceMaterial;
+import com.truesim.common.procedural.fence.FenceOptions;
+import com.truesim.common.procedural.fence.FenceRecipe;
+import com.truesim.common.procedural.fence.FenceType;
+import com.truesim.common.procedural.settlement.RoadMeshes;
+import com.truesim.common.procedural.settlement.Settlement;
+import com.truesim.samples.showcase.assets.NamedMaterials;
 import com.truesim.effects.atmosphere.fog.IndoorZone;
 import com.truesim.effects.atmosphere.render.AerialPerspective;
 import com.truesim.engine.scene.ShadingHookOverride;
@@ -9,7 +25,6 @@ import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.samples.showcase.assets.Surfaces;
 import com.truesim.samples.showcase.fx.VillageEffects;
 import com.truesim.samples.showcase.render.ShowcaseRenderer;
-import com.truesim.samples.showcase.world.Buildings.Kind;
 import com.truesim.samples.showcase.world.VillageLayout.Building;
 import com.truesim.samples.showcase.world.VillageLayout.Prop;
 import com.truesim.scene.assets.AssetRef;
@@ -33,6 +48,7 @@ import com.truesim.scene.world.Range;
 import com.truesim.scene.world.World;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,6 +101,18 @@ public final class Village implements AutoCloseable {
         List<VillageLayout.Fence> fences, boolean origin) {
     }
 
+    /** A building in the scene: its node and the level of detail it draws. */
+    private static final class Placed {
+        final long node;
+        final Building building;
+        int level = -1;
+
+        Placed(long node, Building building) {
+            this.node = node;
+            this.building = building;
+        }
+    }
+
     /** A light the day turns up and down: its node and its full intensity (cd). */
     public record Light(long node, double candela) {
     }
@@ -101,19 +129,21 @@ public final class Village implements AutoCloseable {
     private final VillageMeshes meshes;
     private final Map<String, AssetRef<ModelData>> models = new HashMap<>();
     private final List<AssetRef<MaterialData>> groundMaterials;
-    private final Map<Kind, List<AssetRef<MaterialData>>> buildingMaterials = new HashMap<>();
-    private final List<AssetRef<MaterialData>> chaletPlaster;
-    private final AssetRef<MaterialData> cobbles;
-    private final AssetRef<MaterialData> kerb;
-    private final AssetRef<MaterialData> gravel;
-    private final AssetRef<MaterialData> fenceWood;
+    private final Map<BuildingSlot, AssetRef<MaterialData>> buildingMaterials = new EnumMap<>(BuildingSlot.class);
+    private final List<AssetRef<MaterialData>> roadMaterials;
+    private final FenceAssets fenceAssets;
+    private final List<String> fenceMaterials;
+    /** The buildings in the scene and the level each draws (switched by the camera's distance). */
+    private final List<Placed> placed = new ArrayList<>();
     /** Glowing materials the day animates: lamps' bulbs, the rooms' bulbs. */
     public final AssetRef<MaterialData> lampGlow = Surfaces.glowing(1, 0.85f, 0.6f, 0.4f);
     /** The street lamps' lantern glass: frosted, lit from within. */
     public final AssetRef<MaterialData> lampGlass = Surfaces.glowing(0.9f, 0.85f, 0.75f, 0.25f);
     public final AssetRef<MaterialData> roomGlow = Surfaces.glowing(1, 0.8f, 0.55f, 0.45f);
-    private final AssetRef<MaterialData> mirrorGlass = Surfaces.metal(0.95f, 0.95f, 0.95f, 0.02f);
-    private final AssetRef<MaterialData> mirrorFrame = Surfaces.metal(0.8f, 0.6f, 0.3f, 0.35f);
+    /** A lit room's window seen from outside: its curtain glowing, two-sided. */
+    public final AssetRef<MaterialData> windowGlow = MaterialData.builder(MaterialData.METALLIC_ROUGHNESS)
+        .set("baseColor", 0.9f, 0.75f, 0.5f, 1).set("roughness", 0.8f).set("metallic", 0)
+        .set("emissive", 0, 0, 0).doubleSided(true).build().ref();
     /** The day's registries: street lamps and door lanterns, rooms' lights, fires, chimneys' smoke. */
     private final List<Light> lamps = new ArrayList<>();
     private final List<Light> rooms = new ArrayList<>();
@@ -121,7 +151,7 @@ public final class Village implements AutoCloseable {
     private final List<Effect> smokes = new ArrayList<>();
 
     public Village(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Surfaces surfaces,
-        com.truesim.effects.terrain.data.TerrainSite site) {
+        com.truesim.effects.terrain.data.TerrainSite site, NamedMaterials named, java.nio.file.Path cache) {
         this.renderer = renderer;
         this.scene = renderer.scene();
         this.ground = ground;
@@ -129,33 +159,43 @@ public final class Village implements AutoCloseable {
         this.assets = renderer.assets();
         tiles = new GroundTiles(ground, Surfaces.MEADOW.size(), Surfaces.FOREST_FLOOR.size(),
             Surfaces.MOSSY_ROCK.size());
-        meshes = new VillageMeshes(ground, layout);
+        meshes = new VillageMeshes();
         groundMaterials = List.of(surfaces.scan(Surfaces.MEADOW, Surfaces.MEADOW_TINT[0], Surfaces.MEADOW_TINT[1],
             Surfaces.MEADOW_TINT[2]), surfaces.scan(Surfaces.FOREST_FLOOR),
             surfaces.scan(Surfaces.MOSSY_ROCK), Surfaces.plain(0.62f, 0.62f, 0.64f, 0.85f));
-        AssetRef<MaterialData> stone = surfaces.scan(Surfaces.STONE_WALL);
-        AssetRef<MaterialData> planks = surfaces.scan(Surfaces.PLANKS);
-        AssetRef<MaterialData> worn = surfaces.scan(Surfaces.BEAMS);
-        // limewashed rooms, warm (Poly Haven's painted plaster is blue-green: the café read cold)
-        AssetRef<MaterialData> interior = surfaces.scan(Surfaces.PLASTER, 0.98f, 0.9f, 0.78f);
+        // the buildings' slots (common-procedural's BuildingSlot): Poly Haven's scans at their real sizes
         AssetRef<MaterialData> glass = Surfaces.glass();
-        AssetRef<MaterialData> hearth = surfaces.scan(Surfaces.GRANITE, 0.7f, 0.7f, 0.7f);
-        AssetRef<MaterialData> shutters = surfaces.scan(Surfaces.BEAMS, 0.35f, 0.95f, 0.5f); // painted green
-        buildingMaterials.put(Kind.CHALET, List.of(stone, planks, surfaces.scan(Surfaces.SLATES), worn, interior,
-            surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth, shutters));
-        chaletPlaster = List.of(stone, surfaces.scan(Surfaces.PLASTER, 0.97f, 0.93f, 0.85f),
-            surfaces.scan(Surfaces.TILES), worn, interior, surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth,
-            surfaces.scan(Surfaces.BEAMS, 1.1f, 0.45f, 0.35f)); // painted ox-blood
-        buildingMaterials.put(Kind.CAFE, List.of(stone, surfaces.scan(Surfaces.PLASTER, 0.95f, 0.88f, 0.75f),
-            surfaces.scan(Surfaces.TILES), worn, interior, surfaces.scan(Surfaces.PARQUET), glass, hearth,
-            surfaces.scan(Surfaces.DARK_WOOD)));
-        buildingMaterials.put(Kind.CHURCH, List.of(surfaces.scan(Surfaces.GRANITE), surfaces.scan(Surfaces.PLASTER),
-            surfaces.scan(Surfaces.DARK_SLATES), worn, Surfaces.plain(0.85f, 0.85f, 0.82f, 0.5f),
-            surfaces.scan(Surfaces.FLOORBOARDS), glass, hearth, Surfaces.metal(0.85f, 0.65f, 0.3f, 0.3f)));
-        cobbles = surfaces.scan(Surfaces.COBBLES);
-        kerb = surfaces.scan(Surfaces.GRANITE);
-        gravel = surfaces.scan(Surfaces.TRAIL);
-        fenceWood = surfaces.scan(Surfaces.PLANKS, 0.8f, 0.8f, 0.8f);
+        Map<BuildingSlot, AssetRef<MaterialData>> m = buildingMaterials;
+        m.put(BuildingSlot.STONE, surfaces.scan(Surfaces.STONE_WALL));
+        m.put(BuildingSlot.PLASTER, surfaces.scan(Surfaces.PLASTER, 0.97f, 0.94f, 0.88f));
+        m.put(BuildingSlot.TIMBER, surfaces.scan(Surfaces.PLANKS));
+        m.put(BuildingSlot.TRIM, surfaces.scan(Surfaces.BEAMS));
+        m.put(BuildingSlot.SHINGLES, surfaces.scan(Surfaces.SHINGLES));
+        m.put(BuildingSlot.SLATES, surfaces.scan(Surfaces.SLATES));
+        // limewashed rooms, warm
+        m.put(BuildingSlot.INTERIOR, surfaces.scan(Surfaces.PLASTER, 0.98f, 0.9f, 0.78f));
+        m.put(BuildingSlot.FLOOR, surfaces.scan(Surfaces.FLOORBOARDS));
+        m.put(BuildingSlot.GLASS, glass);
+        m.put(BuildingSlot.WINDOW, Surfaces.plain(0.02f, 0.025f, 0.03f, 0.08f)); // far levels' dark panes
+        m.put(BuildingSlot.HEARTH, surfaces.scan(Surfaces.GRANITE, 0.7f, 0.7f, 0.7f));
+        m.put(BuildingSlot.SHUTTERS, surfaces.scan(Surfaces.BEAMS, 0.35f, 0.95f, 0.5f)); // painted green
+        m.put(BuildingSlot.DOOR, surfaces.scan(Surfaces.DARK_WOOD));
+        m.put(BuildingSlot.METAL, Surfaces.metal(0.3f, 0.3f, 0.32f, 0.5f));
+        m.put(BuildingSlot.FIREWOOD, surfaces.scan(Surfaces.WORN_WOOD, 1.1f, 0.95f, 0.8f));
+        m.put(BuildingSlot.FOLIAGE, Surfaces.plain(0.05f, 0.12f, 0.03f, 0.6f));
+        m.put(BuildingSlot.FLOWERS, Surfaces.plain(0.55f, 0.04f, 0.06f, 0.5f)); // geraniums
+        // the roads' slots: cobbles, gravel, dirt, kerb, steps
+        roadMaterials = List.of(surfaces.scan(Surfaces.COBBLES), surfaces.scan(Surfaces.TRAIL),
+            surfaces.scan(Surfaces.TRAIL, 0.75f, 0.65f, 0.55f), surfaces.scan(Surfaces.GRANITE),
+            surfaces.scan(Surfaces.GRANITE));
+        // fences: common-procedural's, on the ground; their albedo is their vertex colour, so the materials are white
+        // with the scans' relief (normals and roughness) only
+        fenceAssets = new FenceAssets(assets.paths(), new GenerationCache(cache)).install();
+        fenceAssets.ground("showcase", ground::height);
+        fenceMaterials = List.of(named.name("fence/wood.mat", surfaces.relief(Surfaces.PLANKS)),
+            named.name("fence/stone.mat", surfaces.relief(Surfaces.STONE_WALL)),
+            named.name("fence/metal.mat", MaterialData.builder(MaterialData.METALLIC_ROUGHNESS)
+                .set("baseColor", 1, 1, 1, 1).set("roughness", 0.5f).set("metallic", 1f).build()));
         Set<String> used = new LinkedHashSet<>();
         for (Prop p : layout.props()) {
             used.add(p.model());
@@ -229,6 +269,7 @@ public final class Village implements AutoCloseable {
         if (terrain != null) {
             terrain.update();
         }
+        levels(x, z);
     }
 
     /** Whether everything the camera asks for has loaded and attached. */
@@ -349,15 +390,21 @@ public final class Village implements AutoCloseable {
             for (Prop p : data.props()) {
                 prop(p, content);
             }
-            if (data.origin()) { // the square and the road live in the origin's cell
-                long square = content.create();
-                scene.setTranslation(square, layout.originX(), 0, layout.originZ());
-                scene.components().set(square, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Square(
-                    layout.originX(), layout.originZ(), VillageLayout.SQUARE_X, VillageLayout.SQUARE_Z)),
-                    List.of(cobbles, kerb)));
-                long road = content.create();
-                scene.components().set(road, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Road(4.5)),
-                    List.of(gravel)));
+            if (data.origin()) { // the plan's roads and square live in the origin's cell: its road meshes' tiles
+                List<RoadMeshes.Tile> tiles = layout.settlement().roadMeshes();
+                for (int t = 0; t < tiles.size(); t++) {
+                    RoadMeshes.Tile tile = tiles.get(t);
+                    List<AssetRef<MaterialData>> materials = new ArrayList<>();
+                    for (int slot = 0; slot < RoadMeshes.SLOTS; slot++) {
+                        if (SceneMeshes.kept(tile.mesh(), slot)) {
+                            materials.add(roadMaterials.get(slot));
+                        }
+                    }
+                    long node = content.create();
+                    scene.setTranslation(node, tile.x(), tile.y(), tile.z());
+                    scene.components().set(node, Renderable.TYPE, Renderable.of(
+                        com.truesim.common.procedural.assets.SettlementAssets.mesh(layout.settlement(), t), materials));
+                }
             }
         }
 
@@ -368,6 +415,7 @@ public final class Village implements AutoCloseable {
                 long node = content.node(i);
                 lamps.removeIf(l -> l.node() == node);
                 rooms.removeIf(l -> l.node() == node);
+                placed.removeIf(p -> p.node == node);
             }
             fires.removeIf(e -> !e.alive());
             smokes.removeIf(e -> !e.alive());
@@ -377,21 +425,6 @@ public final class Village implements AutoCloseable {
 
     // ---------------------------------------------------------------- placing
 
-    private double floorOf(Building b) {
-        // the ground floor at the highest ground under the footprint, a little above: the plinth fills the rest
-        double highest = -Double.MAX_VALUE;
-        double c = Maths.cos(b.yaw());
-        double s = Maths.sin(b.yaw());
-        for (int i = -2; i <= 2; i++) {
-            for (int j = -2; j <= 2; j++) {
-                double lx = b.spec().width() * i / 4;
-                double lz = b.spec().depth() * j / 4;
-                highest = Math.max(highest, ground.height(b.x() + lx * c + lz * s, b.z() - lx * s + lz * c));
-            }
-        }
-        return highest + 0.15;
-    }
-
     private void place(long node, double x, double y, double z, double yaw) {
         scene.setTranslation(node, x, y, z);
         scene.setRotation(node, 0, Maths.sin(yaw / 2), 0, Maths.cos(yaw / 2));
@@ -399,67 +432,127 @@ public final class Village implements AutoCloseable {
 
     private void building(Building b, CellContent content) {
         long node = content.create();
-        double floor = floorOf(b);
-        place(node, b.x(), floor, b.z(), b.yaw());
-        List<AssetRef<MaterialData>> materials = buildingMaterials.get(b.spec().kind());
-        if (b.spec().kind() == Kind.CHALET && b.spec().seed() % 3 == 0) {
-            materials = chaletPlaster;
-        }
-        scene.components().set(node, Renderable.TYPE, Renderable.of(Buildings.mesh(b.spec()), materials));
-        Buildings.Fittings f = Buildings.fittings(b.spec());
+        place(node, b.x(), b.floor(), b.z(), b.yaw());
+        Placed p = new Placed(node, b);
+        placed.add(p);
+        level(p, 2); // until the camera's distance says otherwise
         // no aerial perspective on the house and what is in it: its nearest slice tinted the rooms blue
         // (true-sim/effects-atmosphere#9); a house is near enough that its air shows nothing outside
         scene.components().set(node, ShadingHookOverride.TYPE, ShadingHookOverride.off(AerialPerspective.HOOK));
+        var fittings = b.model().fittings();
         // the rooms' air: no outdoor fog inside
-        long zone = content.create(node);
-        scene.setTranslation(zone, 0, b.spec().eaves() / 2, 0);
-        scene.components().set(zone, IndoorZone.TYPE, IndoorZone.box(new Vec3(b.spec().width() / 2 - 0.2,
-            b.spec().eaves() / 2, b.spec().depth() / 2 - 0.2)));
+        for (Room room : fittings.rooms()) {
+            long zone = content.create(node);
+            Vec3 c = room.bounds().center();
+            scene.setTranslation(zone, c.x(), c.y(), c.z());
+            Vec3 e = room.bounds().extents();
+            scene.components().set(zone, IndoorZone.TYPE, IndoorZone.box(new Vec3(e.x(), e.y(), e.z())));
+        }
+        BuildingKind kind = b.kind();
         if (b.lit()) {
-            long lamp = content.create(node);
-            scene.setTranslation(lamp, f.ceilingLamp()[0], f.ceilingLamp()[1], f.ceilingLamp()[2]);
-            double candela = b.spec().kind() == Kind.CAFE ? 450 : b.spec().kind() == Kind.CHURCH ? 500 : 260;
-            scene.components().set(lamp, LightSource.TYPE, LightSource.point(1, 0.74f, 0.48f, 0)
-                .range(b.spec().kind() == Kind.CHURCH ? 20 : 11));
-            rooms.add(new Light(lamp, candela));
-            if (b.spec().kind() != Kind.CAFE) { // the café's chandelier is its lamp
-                long bulb = content.create(node);
-                scene.setTranslation(bulb, f.ceilingLamp()[0], f.ceilingLamp()[1] - 0.05, f.ceilingLamp()[2]);
-                scene.components().set(bulb, Renderable.TYPE, Renderable.of(meshes.mesh(
-                    new VillageMeshes.Bulb(0.07, 0.12)), List.of(roomGlow)));
-                Renderable.setCastsShadows(scene, bulb, false);
+            for (Anchor a : fittings.all(Anchor.Kind.CEILING_LAMP)) {
+                Vec3 at = a.position();
+                if (a.room() < 0 || at.y() > 4) {
+                    continue; // the ground floor's rooms (the windows the tour sees)
+                }
+                long lamp = content.create(node);
+                scene.setTranslation(lamp, at.x(), at.y(), at.z());
+                double candela = kind == BuildingKind.INN ? 450 : kind == BuildingKind.CHURCH ? 500 : 260;
+                scene.components().set(lamp, LightSource.TYPE, LightSource.point(1, 0.74f, 0.48f, 0)
+                    .range(kind == BuildingKind.CHURCH ? 20 : 11));
+                rooms.add(new Light(lamp, candela));
+                if (kind != BuildingKind.INN) { // the inn's chandelier is its lamp
+                    long bulb = content.create(node);
+                    scene.setTranslation(bulb, at.x(), at.y() - 0.05, at.z());
+                    scene.components().set(bulb, Renderable.TYPE, Renderable.of(meshes.mesh(
+                        new VillageMeshes.Bulb(0.07, 0.12)), List.of(roomGlow)));
+                    Renderable.setCastsShadows(scene, bulb, false);
+                }
+            }
+            // the lit rooms' windows: a curtain glowing behind each, seen from outside at night (not the inn's and
+            // the church's: the tour goes into the one, the other's are tall stone-framed lights)
+            if (kind == BuildingKind.CHALET || kind == BuildingKind.FARMHOUSE) {
+                for (Opening o : fittings.openings(Opening.Kind.WINDOW)) {
+                    if (o.room() < 0) {
+                        continue;
+                    }
+                    Vec3 c = o.center();
+                    Vec3 out = o.outward();
+                    long pane = content.create(node);
+                    double back = o.depth() + 0.04;
+                    place(pane, c.x() - out.x() * back, c.y(), c.z() - out.z() * back, Maths.atan2(out.x(), out.z()));
+                    scene.components().set(pane, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Pane(
+                        o.width() * 0.9, o.height() * 0.9)), List.of(windowGlow)));
+                    Renderable.setCastsShadows(scene, pane, false);
+                }
+            }
+            for (Anchor a : fittings.all(Anchor.Kind.LANTERN)) {
+                Vec3 at = a.position();
+                long l = content.create(node);
+                scene.setTranslation(l, at.x(), at.y(), at.z());
+                scene.components().set(l, LightSource.TYPE, LightSource.point(1, 0.7f, 0.42f, 0).range(9));
+                lamps.add(new Light(l, 90));
+                spawn(models.get("Lantern_01"), content, node, at.x(), at.y() - 0.18, at.z(), a.yaw(), 1.4);
+                long glow = content.create(node);
+                scene.setTranslation(glow, at.x(), at.y() - 0.12, at.z());
+                scene.components().set(glow, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Bulb(0.035,
+                    0.08)), List.of(lampGlow)));
+                Renderable.setCastsShadows(scene, glow, false);
             }
         }
-        for (double[] lantern : f.lanterns()) {
-            if (!b.lit()) {
-                break;
-            }
-            long l = content.create(node);
-            scene.setTranslation(l, lantern[0], lantern[1], lantern[2]);
-            scene.components().set(l, LightSource.TYPE, LightSource.point(1, 0.7f, 0.42f, 0).range(9));
-            lamps.add(new Light(l, 90));
-            AssetRef<ModelData> model = models.get("Lantern_01");
-            spawn(model, content, node, lantern[0], lantern[1] - 0.18, lantern[2], 0, 1.4);
-            long glow = content.create(node);
-            scene.setTranslation(glow, lantern[0], lantern[1] - 0.12, lantern[2]);
-            scene.components().set(glow, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Bulb(0.035,
-                0.08)), List.of(lampGlow)));
-            Renderable.setCastsShadows(scene, glow, false);
-        }
-        if (b.fire() && f.fire() != null) {
+        Anchor hearth = fittings.first(Anchor.Kind.FIRE);
+        Anchor chimney = fittings.first(Anchor.Kind.CHIMNEY);
+        if (b.fire() && hearth != null && chimney != null) {
             long fire = content.create(node);
-            scene.setTranslation(fire, f.fire()[0], f.fire()[1], f.fire()[2]);
+            scene.setTranslation(fire, hearth.position().x(), hearth.position().y(), hearth.position().z());
             fires.add(renderer.effects().play(VillageEffects.HEARTH, fire));
-            long chimney = content.create(node);
-            scene.setTranslation(chimney, f.chimney()[0], f.chimney()[1] + 0.1, f.chimney()[2]);
-            smokes.add(renderer.effects().play(VillageEffects.CHIMNEY, chimney));
+            long smoke = content.create(node);
+            scene.setTranslation(smoke, chimney.position().x(), chimney.position().y() + 0.1, chimney.position().z());
+            smokes.add(renderer.effects().play(VillageEffects.CHIMNEY, smoke));
         }
-        if (b.spec().kind() == Kind.CAFE) {
-            // the big mirror on the back wall, behind the bar
-            long mirror = content.create(node);
-            scene.setTranslation(mirror, 1.6, 0.9, -b.spec().depth() / 2 + Buildings.STONE_THICK + 0.01);
-            scene.components().set(mirror, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Mirror(2.6,
-                1.7)), List.of(mirrorFrame, mirrorGlass)));
+    }
+
+    /** Draws {@code p}'s building at {@code level}: its meshes' level, a material for each slot it has. */
+    private void level(Placed p, int level) {
+        if (p.level == level) {
+            return;
+        }
+        var model = p.building.model();
+        var mesh = model.lods().get(level);
+        List<AssetRef<MaterialData>> materials = new ArrayList<>();
+        for (BuildingSlot slot : BuildingSlot.all()) {
+            if (SceneMeshes.kept(mesh, slot.ordinal())) {
+                materials.add(buildingMaterials.get(slot));
+            }
+        }
+        scene.components().set(p.node, Renderable.TYPE, Renderable.of(BuildingAssets.mesh(model, level, false),
+            materials));
+        p.level = level;
+    }
+
+    /**
+     * The buildings' levels by the camera's distance (the generator's four: everything, without small carving and
+     * single logs, closed walls with dark panes, the volumes): common-procedural builds no cluster hierarchy for a
+     * building, its levels are its detail.
+     */
+    private void levels(double x, double z) {
+        for (Placed p : placed) {
+            double dx = p.building.x() - x;
+            double dz = p.building.z() - z;
+            double d = Math.sqrt(dx * dx + dz * dz);
+            int want = d < 60 ? 0 : d < 160 ? 1 : d < 450 ? 2 : 3;
+            // a little hysteresis: a level changes only once past its band by a tenth
+            if (p.level >= 0 && Math.abs(want - p.level) == 1) {
+                double edge = switch (Math.min(want, p.level)) {
+                    case 0 -> 60;
+                    case 1 -> 160;
+                    default -> 450;
+                };
+                if (Math.abs(d - edge) < edge * 0.1) {
+                    continue;
+                }
+            }
+            level(p, want);
         }
     }
 
@@ -488,11 +581,37 @@ public final class Village implements AutoCloseable {
     }
 
     private void fence(VillageLayout.Fence f, CellContent content) {
-        // one node, the mesh draped on the ground: every post on the ground under it, the rails sloping between
+        // common-procedural's fence on the ground: every post on the ground under it, rails from post to post; the
+        // gardens' Schaerhag or pickets, the pastures' Stangenzaun, post and rail or a dry-stone wall, by its seed
+        long seed = f.seed();
+        int pick = (int) Math.floorMod(seed, 4L);
+        FenceType type = f.kind() == Settlement.FenceKind.GARDEN ? (pick < 2 ? FenceType.SCHAERHAG : FenceType.PICKET)
+            : switch (pick) {
+                case 0 -> FenceType.STANGENZAUN;
+                case 1 -> FenceType.POST_AND_RAIL;
+                case 2 -> FenceType.DRY_STONE;
+                default -> FenceType.SCHAERHAG;
+            };
+        FenceOptions options = FenceOptions.DEFAULTS.withWood(pick % 2 == 0 ? FenceMaterial.WEATHERED_LARCH
+            : FenceMaterial.WEATHERED_SPRUCE).withStone(FenceMaterial.LIMESTONE).withWeathering(0.7).withLichen(0.35)
+            .withMoss(0.4).withDamage(0.05);
+        List<Double> line = new ArrayList<>();
+        for (double v : f.line()) {
+            line.add(v);
+        }
+        FenceRecipe recipe = new FenceRecipe(type, options, seed, line, List.of(), "showcase", fenceMaterials);
+        // generated now (milliseconds), for its origin and the slots it uses; its mesh a cluster hierarchy
+        com.truesim.common.procedural.fence.Fence fence = fenceAssets.fence(recipe);
+        var mesh = fence.lods().getFirst();
+        List<AssetRef<MaterialData>> materials = new ArrayList<>();
+        for (int slot = 0; slot < fenceMaterials.size(); slot++) {
+            if (SceneMeshes.kept(mesh, slot)) {
+                materials.add(assets.ref(RenderAssets.MATERIAL, fenceMaterials.get(slot)));
+            }
+        }
         long node = content.create();
-        scene.setTranslation(node, f.x0(), 0, f.z0());
-        scene.components().set(node, Renderable.TYPE, Renderable.of(meshes.mesh(new VillageMeshes.Fence(f.x0(), f.z0(),
-            f.x1(), f.z1(), 2.4)), List.of(fenceWood)));
+        scene.setTranslation(node, fence.origin().x(), fence.origin().y(), fence.origin().z());
+        scene.components().set(node, Renderable.TYPE, Renderable.of(fenceAssets.mesh(recipe, 0, true), materials));
     }
 
     private void prop(Prop p, CellContent content) {
@@ -500,7 +619,7 @@ public final class Village implements AutoCloseable {
         Building b = p.inside() == null || "tree".equals(p.inside()) ? null : layout.building(p.inside());
         if (b != null) {
             long anchor = content.create();
-            place(anchor, b.x(), floorOf(b), b.z(), b.yaw());
+            place(anchor, b.x(), b.floor(), b.z(), b.yaw());
             for (long n : spawn(model, content, anchor, p.x(), p.y(), p.z(), p.yaw(), p.scale())) {
                 if (scene.components().get(n, Renderable.TYPE) != null) {
                     scene.components().set(n, ShadingHookOverride.TYPE,

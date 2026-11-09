@@ -45,6 +45,8 @@ public final class Surfaces {
     public static final Scan SNOW = new Scan("snow_02", "2k", 4.0, 0.85f, 0.87f, 0.9f, 1);
     /** Beams, balconies, shutters' frames: rough sawn wood. */
     public static final Scan BEAMS = new Scan("rough_wood", "2k", 2.0, 0.3f, 0.22f, 0.15f, 1);
+    /** Wooden shingles on the roofs. */
+    public static final Scan SHINGLES = new Scan("roof_planks", "2k", 2.0, 0.35f, 0.28f, 0.22f, 1);
     /** Window frames and doors: dark stained wood. */
     public static final Scan DARK_WOOD = new Scan("dark_wood", "2k", 2.0, 0.2f, 0.1f, 0.06f, 0.8f);
 
@@ -78,6 +80,22 @@ public final class Surfaces {
             .texture("normalTexture", texture(base + "nor_gl" + suffix + "#linear"))
             .set("roughness", scan.roughness()).set("metallic", 1)
             .build().ref();
+    }
+
+    /**
+     * The scanned surface's relief only: white, its normals and roughness, for meshes whose vertex colour is their
+     * albedo (common-procedural's fences).
+     */
+    public MaterialData relief(Scan scan) {
+        MaterialData.Builder b = MaterialData.builder(MaterialData.METALLIC_ROUGHNESS).set("baseColor", 1, 1, 1, 1)
+            .set("roughness", scan.roughness()).set("metallic", 1);
+        if (!assets.polyHaven()) {
+            return b.set("roughness", 0.85f).set("metallic", 0).build();
+        }
+        String base = ShowcaseAssets.MOUNT + "://" + scan.asset() + "/" + scan.asset() + "_";
+        String suffix = "_" + scan.resolution() + ".jpg";
+        return b.texture("ormTexture", texture(base + "arm" + suffix + "#linear"))
+            .texture("normalTexture", texture(base + "nor_gl" + suffix + "#linear")).build();
     }
 
     /** {@code scan} as a layer of effects-terrain's material (albedo, normal, the ORM's green for roughness). */

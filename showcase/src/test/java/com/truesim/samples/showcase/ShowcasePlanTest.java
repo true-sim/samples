@@ -6,17 +6,15 @@ import static org.assertj.core.api.Assertions.within;
 import com.truesim.samples.showcase.assets.PolyHavenManifest;
 import com.truesim.samples.showcase.tour.CameraSpline;
 import com.truesim.samples.showcase.tour.TourScript;
-import com.truesim.samples.showcase.world.Buildings;
 import com.truesim.samples.showcase.world.ValleyGround;
 import com.truesim.samples.showcase.world.VillageLayout;
 import com.truesim.samples.showcase.day.DayState;
-import com.truesim.scene.assets.mesh.MeshData;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** The showcase's plan without a device: the manifest, the village's layout, its meshes, the tour's script. */
+/** The showcase's plan without a device: the manifest, the tour's script and its street frame, the effects. */
 class ShowcasePlanTest {
 
     @Test
@@ -29,53 +27,39 @@ class ShowcasePlanTest {
             assertThat(e.url()).startsWith("https://dl.polyhaven.org/");
             assertThat(files.add(e.asset() + "/" + e.file())).as("pinned once: " + e.file()).isTrue();
         }
-        VillageLayout layout = new VillageLayout();
-        for (VillageLayout.Prop p : layout.props()) {
-            assertThat(manifest.assets()).as("the model " + p.model() + " is pinned").contains(p.model());
+        for (String model : VillageLayout.MODELS) {
+            assertThat(manifest.assets()).as("the model " + model + " is pinned").contains(model);
         }
     }
 
     @Test
-    void buildingsStandApartAndOffTheSquare() {
-        VillageLayout layout = new VillageLayout();
-        var buildings = layout.buildings();
-        for (int i = 0; i < buildings.size(); i++) {
-            VillageLayout.Building a = buildings.get(i);
-            double ra = Math.hypot(a.spec().width(), a.spec().depth()) / 2;
-            for (int j = i + 1; j < buildings.size(); j++) {
-                VillageLayout.Building b = buildings.get(j);
-                double rb = Math.hypot(b.spec().width(), b.spec().depth()) / 2;
-                assertThat(Math.hypot(a.x() - b.x(), a.z() - b.z())).as(a.name() + " and " + b.name())
-                    .isGreaterThan(0.8 * (ra + rb));
-            }
-            // no building's middle on the square
-            assertThat(Math.abs(a.x()) < VillageLayout.SQUARE_X && Math.abs(a.z()) < VillageLayout.SQUARE_Z)
-                .as(a.name()).isFalse();
-        }
+    void theStreetsFrameFollowsTheStreet() {
+        // a street running south, then bending east: the frame's along and across follow it
+        TourScript script = new TourScript(new ValleyGround(), 0, 0, false, new double[] {0, 50, 50, 100}, null);
+        double[] out = new double[2];
+        script.onStreet(0, 25, out);
+        assertThat(out[0]).isCloseTo(0, within(1e-9));
+        assertThat(out[1]).isCloseTo(25, within(1e-9));
+        script.onStreet(3, 25, out); // across: east of a way south
+        assertThat(out[0]).isCloseTo(3, within(1e-9));
+        script.onStreet(0, 50 + Math.sqrt(2) * 25, out); // half along the bend
+        assertThat(out[0]).isCloseTo(25, within(1e-6));
+        assertThat(out[1]).isCloseTo(75, within(1e-6));
+        script.onStreet(0, -10, out); // back past the square's centre: on north
+        assertThat(out[1]).isCloseTo(-10, within(1e-9));
     }
 
     @Test
     void theSquareLiesNearlyLevelAndTheMountainsRiseFarOut() {
         ValleyGround ground = new ValleyGround();
         double h0 = ground.height(0, 0);
-        for (double x = -VillageLayout.SQUARE_X; x <= VillageLayout.SQUARE_X; x += 2) {
-            for (double z = -VillageLayout.SQUARE_Z; z <= VillageLayout.SQUARE_Z; z += 2) {
+        for (double x = -17; x <= 17; x += 2) {
+            for (double z = -13; z <= 13; z += 2) {
                 assertThat(ground.height(x, z) - h0).isBetween(-0.5, 0.5);
             }
         }
         assertThat(ground.height(5000, 0)).isGreaterThan(h0 + 1500);
         assertThat(ground.height(-5000, 3000)).isGreaterThan(h0 + 1500);
-    }
-
-    @Test
-    void aHouseIsMadeOfEveryMaterialSlot() {
-        try (MeshData mesh = Buildings.make(new Buildings.Spec(Buildings.Kind.CHALET, 9, 11, 3, 2.8, 24, 1))) {
-            Set<Integer> submeshes = new HashSet<>();
-            for (int m = 0; m < mesh.meshletCount(); m++) {
-                submeshes.add(mesh.meshletSubmesh(m));
-            }
-            assertThat(submeshes).hasSize(Buildings.SUBMESHES);
-        }
     }
 
     @Test
