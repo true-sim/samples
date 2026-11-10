@@ -146,8 +146,12 @@ public final class TourScript {
             // village's meadow, where the dawn takes over; the world streams in as it flies (terrain tiles refining,
             // the forest from impostors to meshes, the village's cells)
             segments.add(new Segment("flyover", 60, List.of(flyover("flyover", 0, 60)),
-                List.of(new double[] {0, 6.75, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {60, 6.94, 0.0012, 0.006,
-                    0, 0, 0, 1, 0.6}),
+                // the haze thin from high up (the dawn's valley fog would hide the land from kilometres off), thickening
+                // into the dawn's as it comes down into the valley
+                // (sunrise: the peaks lit, the valley still in shadow)
+                List.of(new double[] {0, 7.3, 0.00003, 0, 0, 0, 0, 1, 0.6}, new double[] {40, 7.43, 0.0001, 0, 0, 0,
+                    0, 1, 0.6}, new double[] {52, 7.47, 0.0005, 0.002, 0, 0, 0, 1, 0.6}, new double[] {60, 7.49, 0.0012,
+                    0.006, 0, 0, 0, 1, 0.6}),
                 s -> {
                     s.weather = WeatherPreset.FAIR;
                     s.weatherRate = 6;
@@ -163,7 +167,7 @@ public final class TourScript {
                 {0, 12, 3.5, 205, 0, 8, 0}, {17, 6, 3, 128, 4, 8, -10}}),
             shot("street", 17, 15, new double[][] {
                 {0, 7, 1.8, 76, -2, 4, 0}, {15, 3, 9, 46, -4, 5, -60}})),
-            List.of(new double[] {0, 6.95, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 7.7, 0.0005, 0.0015, 0,
+            List.of(new double[] {0, 7.5, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {32, 8.1, 0.0005, 0.0015, 0,
                 0, 0, 0, 0.3}),
             s -> {
                 s.weather = WeatherPreset.FAIR;

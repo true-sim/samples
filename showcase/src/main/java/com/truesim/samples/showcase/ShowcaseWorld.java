@@ -231,6 +231,11 @@ public final class ShowcaseWorld implements AutoCloseable {
         return village.ready() && flora.ready() && renderer.assets().resources().loaded();
     }
 
+    /** Whether the ground's tiles the camera sees are built: the flyover starts from there, the rest streaming in. */
+    public boolean groundReady() {
+        return village.groundReady();
+    }
+
     /** What {@link #ready} still waits for (a pre-roll that timed out says so). */
     public String waitingFor() {
         return "village " + village.ready() + ", plant models " + flora.modelsLoaded() + ", scatters waiting "

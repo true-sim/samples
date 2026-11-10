@@ -112,8 +112,10 @@ public final class ShowcaseTour {
                                     + world.renderer().rayTracingReport());
                                 throw e;
                             }
-                            // a cold start loads the forest; the flyover streams live: no wait, only the settling
-                            if (segment.live() || world.ready() || System.nanoTime() - started > 400_000_000_000L) {
+                            // a cold start loads the forest; the flyover streams live: only the ground in its first
+                            // view built (the land seen from 30 km out), the rest streaming in as it flies
+                            if ((segment.live() ? world.groundReady() : world.ready())
+                                || System.nanoTime() - started > 400_000_000_000L) {
                                 settled++;
                             } else {
                                 waited++;

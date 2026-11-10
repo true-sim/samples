@@ -142,7 +142,9 @@ public final class VillageEffects {
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(70, 4, 70), Init.velocity(Bind.random(-0.2f, 0.2f), Bind.random(-1.2f, -0.8f),
                     Bind.random(-0.2f, 0.2f)), Init.lifetime(Bind.random(16, 20)),
-                    Init.size(Bind.random(0.025f, 0.05f)), Init.color(Bind.color(0.9f, 0.9f, 0.95f, 0.95f)))
+                    // big wet flakes, brighter than a white surface lit (each a cluster of crystals scattering forwards),
+                    // so they read against the dusk, glittering where the lamps and windows light them
+                    Init.size(Bind.random(0.04f, 0.09f)), Init.color(Bind.color(1.8f, 1.8f, 1.9f, 0.95f)))
                 .update(Forces.gravity(Bind.constant(0.1f)), Forces.drag(0.9f), Forces.wind(0.7f),
                     Forces.curl(Bind.constant(0.5f), 0.3f, 0.4f, 2),
                     Module.of("showcase.flutter").with("radius", Bind.constant(0.1f)).with("rate",

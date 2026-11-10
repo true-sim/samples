@@ -304,7 +304,12 @@ public final class Village implements AutoCloseable {
 
     /** Whether everything the camera asks for has loaded and attached. */
     public boolean ready() {
-        return world.isReady(camera) && (terrain == null || terrain.pendingTiles() == 0);
+        return world.isReady(camera) && groundReady();
+    }
+
+    /** Whether the terrain's tiles the camera asks for are built (the flyover waits for these only). */
+    public boolean groundReady() {
+        return terrain == null || terrain.pendingTiles() == 0;
     }
 
     public World world() {

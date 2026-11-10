@@ -168,7 +168,11 @@ public final class DayDriver {
         renderer.hooks().set(SimpleSnow.HOOK, SnowParameters.DEFAULTS.withCoverage((float) state.snowCover)
             .withSnowfall((float) state.snowfall).withNoiseScale(0.07f).withNoiseSharpness(0.7f).withSlopeStart(18)
             .withSlopeEnd(50), true);
-        scene.setTranslation(weatherFx, x, y + 14, z);
+        if (state.snowfall > 0 || state.rain > 0) {
+            // the flakes and drops about the camera; left where they are when nothing falls (moved, every particle
+            // effect's height field is sampled anew: kilometres a frame in the flyover cost seconds of terrain lookups)
+            scene.setTranslation(weatherFx, x, y + 14, z);
+        }
         snow.set(VillageEffects.RATE, (float) Math.max(state.snowfall, 1e-4) * (state.snowfall > 0 ? 1 : 0));
         rain.set(VillageEffects.RATE, (float) state.rain);
         // the drops: brighter than a white surface would be lit (a streak gathers the light along its fall), most of

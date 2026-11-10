@@ -156,6 +156,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private static final double NIGHT_FILL = 8; // the night sky's light over the moon's boost (art-directed)
     private double overcast = 1;
     private boolean indoors;
+    private final ParticleWorld particleGround;
     private double inside; // indoors eased: 0 out, 1 in (a step would flash as the door is passed)
 
     /**
@@ -218,7 +219,8 @@ public final class ShowcaseRenderer implements AutoCloseable {
         flashes = new LightningLights(scene, com.truesim.scene.core.NodeHandle.NONE, 4, 30_000);
         particles = own(new Particles(device, slots, 256L << 20, 2048)).assets(assets.resources())
             .modules(ShowcaseParticleModules.MODULES);
-        particles.heights(ground, 256, 1024);
+        particles.heights(new CachedHeights(ground), 256, 1024);
+        this.particleGround = ground;
         if (rays != null) {
             particles.rays(rays, renderer); // flakes and drops stop on roofs, not only on the ground
         }
@@ -304,6 +306,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PATCH_BUDGET, 4096);
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PLANT_BUDGET, 2048);
         settings.set(game, com.truesim.effects.terrain.TerrainSettings.SCREEN_ERROR, 1f);
+        settings.set(game, com.truesim.effects.terrain.TerrainSettings.BUILD_BUDGET, 128); // the flyover's tiles keep up
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.MAX_WIDEN, 4f);
         // the falls' mist a third as dense: at the network's own density the Staubbach's foot stood as a white
         // ellipsoid in the valley's view from above the trees
@@ -450,7 +453,11 @@ public final class ShowcaseRenderer implements AutoCloseable {
         if (sway != null) {
             sway.update(frameSeconds, settings); // the falls' sheets and jets swaying
         }
-        particles.heightFocus(x, z);
+        // the particles' height field (a million ground lookups each time it moves) follows the camera near the
+        // ground only: from high up (the flyover) nothing falls where it would matter
+        if (y - particleGround.height(x, z) < 300) {
+            particles.heightFocus(x, z);
+        }
         effectSync.clearViewers();
         effectSync.addViewer(x, y, z);
         effectSync.update(frameSeconds);
