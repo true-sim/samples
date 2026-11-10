@@ -135,10 +135,11 @@ public final class VillageEffects {
     }
 
     private static EffectData snow() {
-        // heavy: 30,000 flakes a second at full rate about the camera, some 500,000 in the air, near ones too
-        float perSecond = 30000;
+        // heavy: 16,000 flakes a second at full rate about the camera, some 290,000 in the air (room for 320,000), near ones too (an
+        // emitter of 600,000 was culled whole by the particles' budget: none fell)
+        float perSecond = 16000;
         return EffectData.builder().parameter(RATE, 1)
-            .emitter("flakes", e -> e.space(Space.WORLD).capacity(600_000)
+            .emitter("flakes", e -> e.space(Space.WORLD).capacity(330_000)
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(70, 4, 70), Init.velocity(Bind.random(-0.2f, 0.2f), Bind.random(-1.2f, -0.8f),
                     Bind.random(-0.2f, 0.2f)), Init.lifetime(Bind.random(16, 20)),
