@@ -144,7 +144,10 @@ public final class ShowcaseWorld implements AutoCloseable {
         }
         // the valley's grass, trees, shrubs and flowers, where the ecology puts them
         ProceduralAssets procedural = new ProceduralAssets(assets.paths(), new GenerationCache(cache)).install();
-        flora = new Flora(renderer, ground, layout, placing, rocks, named, procedural);
+        // the river's close-up walks its bank: no tree or shrub on the camera's way
+        double[] bank = riverBank();
+        flora = new Flora(renderer, ground, layout, placing, rocks, named, procedural,
+            (x, z) -> com.truesim.samples.showcase.tour.TourScript.riverPath(bank, x, z));
         if (rivers != null && !rivers.falls().isEmpty()) {
             // the talus' small stones round the Staubbach's foot (the water's close-up): single stones near the
             // camera's way, patches beyond

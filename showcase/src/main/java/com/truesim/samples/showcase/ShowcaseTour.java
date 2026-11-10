@@ -33,6 +33,9 @@ import java.util.Locale;
  * presented), the CPU's update and recording, and the GPU's span from its first pass to its last.
  */
 public final class ShowcaseTour {
+    /** Frames rendered at a cut's new place before the film shows it (not written, and not with -Pmeasure). */
+    private static final int CUT_FRAMES = 30;
+
 
     private static final double HZ = 60;
     private static final double SETTLE = 4;
@@ -112,6 +115,7 @@ public final class ShowcaseTour {
                         double[] gpu = new double[frames];
                         Arrays.fill(gpu, Double.NaN);
                         long lastTimed = -1;
+                        TourScript.Shot previousShot = null;
                         long previous = System.nanoTime();
                         int written = 0;
                         for (int f = 0; f < frames; f++) {
@@ -122,6 +126,17 @@ public final class ShowcaseTour {
                             segment.state(t, state);
                             TourScript.Shot shot = segment.shot(t);
                             shot.spline().at(t - shot.start(), eye);
+                            if (folder != null && previousShot != null && shot != previousShot) {
+                                // a cut: frames at the new place first, written none, so what streams in for it
+                                // (building levels, terrain, the temporal history) is there in its first frame
+                                for (int w = 0; w < CUT_FRAMES; w++) {
+                                    step(world, rig, state, eye, height);
+                                    graph.beginFrame();
+                                    graph.submit(0, 0);
+                                }
+                                previous = System.nanoTime();
+                            }
+                            previousShot = shot;
                             step(world, rig, state, eye, height);
                             graph.beginFrame();
                             graph.submit(0, 0);

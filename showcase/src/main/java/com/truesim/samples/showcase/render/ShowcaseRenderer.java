@@ -155,6 +155,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private double moonBoost = 1;
     private double overcast = 1;
     private boolean indoors;
+    private double inside; // indoors eased: 0 out, 1 in (a step would flash as the door is passed)
 
     /**
      * The device-wide parts on {@code device}, drawing into {@code graph} (whose settings it reads and presets), its
@@ -406,7 +407,8 @@ public final class ShowcaseRenderer implements AutoCloseable {
         double ratio = (below[0] + below[1] + below[2]) / Math.max(clear[0] + clear[1] + clear[2], 1e-30);
         // indoors the sky reaches through the windows only: its uniform light (no occlusion but the AO's) would fill
         // a room with blue; the rooms' lamps and the probes' bounced light carry it
-        environment.intensity((float) (Math.clamp(ratio, 0.02, 1.5) * (indoors ? 0.2 : 1)));
+        inside += ((indoors ? 1 : 0) - inside) * Math.min(1, frameSeconds / 0.5);
+        environment.intensity((float) (Math.clamp(ratio, 0.02, 1.5) * (1 - 0.8 * inside)));
         // under a closed cloud deck the sun gives no direct light: its share follows the sky under the clouds (the
         // cloud shadow mask darkens the ground under single clouds; this, the light the deck lets through at all)
         direct = Math.min(Math.clamp((ratio - 0.3) / 0.5, 0, 1), overcast);

@@ -95,10 +95,11 @@ public final class Flora implements AutoCloseable {
 
     /**
      * The vegetation of {@code layout}'s village on {@code ground} as {@code ecology} has it grow, off what the
-     * village's plan clears; generated through {@code procedural}, materials named through {@code named}.
+     * village's plan clears and off the camera's {@code paths} (0 there, 1 elsewhere); generated through
+     * {@code procedural}, materials named through {@code named}.
      */
     public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology, RockField rocks,
-        NamedMaterials named, ProceduralAssets procedural) {
+        NamedMaterials named, ProceduralAssets procedural, java.util.function.DoubleBinaryOperator paths) {
         this.renderer = renderer;
         var assets = renderer.assets();
         this.procedural = procedural;
@@ -135,9 +136,11 @@ public final class Flora implements AutoCloseable {
             // within some 100 m of the square (the tour's paths); the flowers off what is paved or built
             Clearing trees = new Clearing(ground, plan, true);
             double cell = ecology.parameters().cell();
-            place(ecology, (x, z) -> trees.density(x, z) * open(x - ox, z - oz), snap(ox - TREES / 2, cell),
+            place(ecology, (x, z) -> trees.density(x, z) * open(x - ox, z - oz) * paths.applyAsDouble(x, z),
+                snap(ox - TREES / 2, cell),
                 snap(oz - TREES / 2, cell), TREES, Set.of(Layer.CANOPY, Layer.SHRUB));
-            place(ecology, grassGround::density, snap(ox - HERBS / 2, cell), snap(oz - HERBS / 2, cell), HERBS,
+            place(ecology, (x, z) -> grassGround.density(x, z) * paths.applyAsDouble(x, z), snap(ox - HERBS / 2, cell),
+                snap(oz - HERBS / 2, cell), HERBS,
                 Set.of(Layer.DWARF_SHRUB, Layer.HERB));
             // the rocks over the trees' region, a model per variant (common-procedural's), off the roads and plots
             this.rocks = rocks.region(snap(ox - TREES / 2, cell), snap(oz - TREES / 2, cell), TREES, TREES)

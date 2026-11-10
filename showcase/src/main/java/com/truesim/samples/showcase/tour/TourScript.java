@@ -17,7 +17,7 @@ import java.util.List;
  *       foam and wet banks; then the Staubbach Fall from the meadow before it, its spray at the foot;</li>
  *   <li><b>noon</b>: cumulus drifting, their shadows sweeping the valley; a wide view towards the Jungfrau, a walk
  *       into the square, and in through the inn's door;</li>
- *   <li><b>storm</b>: storm cells roll in, rain and lightning; the street in the rain, then up the valley;</li>
+ *   <li><b>storm</b>: storm cells roll in, rain and lightning; the street in the rain, then the square;</li>
  *   <li><b>dusk</b>: snow begins at sunset and settles, lamps and fireplaces come on; along the street, then round
  *       the square;</li>
  *   <li><b>evening</b>: still snowing as the night comes on, easing off; up the street to the square;</li>
@@ -178,8 +178,10 @@ public final class TourScript {
                 {0, -3, 2.2, 62, 0, 5, 0}, {17, -2, 2, 34, 2, 6, -10}})
                 : shot("climb", 0, 17, new double[][] {
                     {0, 30, 6, 40, -20, 6, -10}, {9, 120, 30, 70, -10, 6, -10}, {17, 215, 6, 85, -20, 10, -40}}),
-            real ? landscape("up the valley", 17, 17, new double[][] { // over the treetops
-                {0, -90, 45, 900, -130, 60, 0}, {17, -80, 50, 780, -120, 80, -200}})
+            // the square in the rain, the church and the wall's falls under the cells (from low: over the treetops
+            // the camera met the cells' bases, effects-weather#18)
+            real ? shot("square in the rain", 17, 17, new double[][] {
+                {0, -8, 3, 14, 0, 12, -60}, {17, 4, 3.5, 9, 2, 16, -60}})
                 : shot("ridge", 17, 17, new double[][] {
                     {0, 200, 4, 70, 0, 12, -10}, {17, 182, 4, 25, -10, 12, -40}})),
             List.of(new double[] {0, 15.7, 0.0002, 0, 0, 0, 0.6, 0, 0.5}, new double[] {12, 15.9, 0.00026, 0, 0, 0, 1,
@@ -229,9 +231,9 @@ public final class TourScript {
         // the night: the sky cleared, the moon up; the show over the village, framed across its roofs
         segments.add(new Segment("night", 34, List.of(
             shot("over the village", 0, 17, new double[][] {
-                {0, 0, 14, 80, 8, 55, -150}, {17, -3, 13, 68, 8, 60, -150}}),
+                {0, 0, 14, 80, 40, 55, -150}, {17, -3, 13, 68, 45, 60, -150}}), // the show east of the wall
             shot("from the square", 17, 17, new double[][] {
-                {0, -7, 2.0, 9, 8, 45, -150}, {17, -3, 2.2, 5, 8, 50, -150}})),
+                {0, -7, 2.0, 9, 25, 45, -150}, {17, -3, 2.2, 5, 28, 50, -150}})),
             List.of(new double[] {0, 23.3, 0.0004, 0, 0, 0.45, 0, 1, 1}, new double[] {34, 23.6, 0.0004, 0, 0, 0.45,
                 0, 1, 1}),
             s -> {
@@ -297,6 +299,22 @@ public final class TourScript {
         return v * v;
     }
 
+    /** The river shot's keys along the bank: (t, metres along, eye height). */
+    private static final double[][] RIVER = {{0, -12, 0.9}, {15, 6, 0.7}};
+
+    /** 0 within 3 m of the river shot's way along {@code bank} (see {@link #water}), 1 from 4 m; 1 without one. */
+    public static double riverPath(double[] bank, double x, double z) {
+        if (bank == null) {
+            return 1;
+        }
+        double side = bank[4] + 2.5;
+        double px = x - (bank[0] - bank[3] * side);
+        double pz = z - (bank[1] + bank[2] * side);
+        double along = Math.clamp(px * bank[2] + pz * bank[3], RIVER[0][1] - 3, RIVER[1][1] + 3);
+        double d = Math.hypot(px - bank[2] * along, pz - bank[3] * along);
+        return Math.clamp(d - 3, 0, 1);
+    }
+
     /** Low along the river's bank downstream, the water's surface, its stones and foam ahead. */
     private Shot river(String name, double start) {
         CameraSpline spline = new CameraSpline(true);
@@ -307,8 +325,7 @@ public final class TourScript {
         double side = bank[4] + 2.5; // on the bank, beside the water
         double sx = -dz;
         double sz = dx;
-        double[][] keys = {{0, -12, 0.9}, {15, 6, 0.7}};
-        for (double[] k : keys) {
+        for (double[] k : RIVER) {
             double ex = x + dx * k[1] + sx * side;
             double ez = z + dz * k[1] + sz * side;
             double tx = x + dx * (k[1] + 22) + sx * bank[4] * 0.2;

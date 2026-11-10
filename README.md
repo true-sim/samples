@@ -156,31 +156,33 @@ effect of the engine and its libraries on at once, in physical units from noon t
   freely: W A S D, Q E, the right mouse button to look; `[` `]` the hour, `T` a time-lapse, `1`-`8` the weather, `B`
   snow, `M` mist, `F` fireworks, `G` the global illumination, `P` the quality preset, `J` depth of field.
   `./gradlew :samples-showcase:tour -Pout=<folder> [-Psize=1920x1080] [-Psegments=dawn,noon]` renders the scripted
-  tour (`TourScript`: dawn, noon, storm, dusk, night; spline cameras low through the meadow, into the square,
-  through the café's door to its mirror, up the Staubbach cliff, towards the Jungfrau, the fireworks) as PNG frames at
+  tour (`TourScript`: dawn, the water, noon, storm, dusk, evening, night; spline cameras low through the meadow and
+  the streets, along the Weisse Lütschine's bank, before the Staubbach, towards the Jungfrau, through the inn's door,
+  the square in the rain and in snow, the fireworks over the village) as PNG frames at
   60 Hz simulated, every second one written (30 fps; `ffmpeg -framerate 30 -i f_%05d.png ...` by hand);
   `-Pmeasure=true` without `-Pout` reports each segment's frame times instead. The tour runs without global
   illumination unless `-Pgi=probes` (or `cascades`) asks for it; the interactive app has the probes by default.
   `-Pskip=fog,aerial,...` leaves passes out (environment, ao, ssr, gi, aerial, fog, clouds) to see what each does.
-- **What it costs** (`-Pmeasure=true`; RX 9070 XT, Ryzen 9 9950X3D, 2026-11-09, quality high, probe GI, forward
-  shading, the Lauterbrunnen terrain and its vegetation; the tour at 60 Hz simulated, two frames in flight, nothing presented; ms, mean
-  and 99th percentile of each segment after its first second; GPU from the first pass to the last). The frames are
-  GPU-bound: the main thread's time is mostly waiting for a frame slot.
+- **What it costs** (`-Pmeasure=true -Pquality=ultra`; RX 9070 XT, Ryzen 9 9950X3D, 2026-11-10, engine 0.203, no
+  GI (as the film), cascaded sun shadows, 4K scans, the Lauterbrunnen terrain with its cliffs, 55,505 plants with
+  impostors, 54,000 rocks and the talus' scree; the tour at 60 Hz simulated, two frames in flight, nothing presented;
+  ms, mean / 99th percentile of each segment after its first second; GPU from the first pass to the last; one
+  process for all segments).
 
-  | Segment | 1920 x 1080 GPU | wall | 3840 x 2160 GPU | wall |
-  |---|---|---|---|---|
-  | dawn (mist, low sun, alpenglow) | 90.6 / 114.8 | 93.8 / 115.3 | 146.0 / 188.8 | 149.6 / 189.8 |
-  | noon (cumulus, Jungfrau, square, café) | 89.7 / 105.4 | 92.2 / 105.7 | 123.4 / 158.9 | 126.2 / 159.2 |
-  | storm (nimbostratus, rain, lightning) | 76.8 / 102.6 | 79.9 / 103.0 | 124.7 / 164.0 | 128.0 / 164.6 |
-  | dusk (snowfall, lamps, fires) | 81.3 / 103.1 | 82.8 / 103.4 | 119.5 / 149.0 | 121.2 / 149.9 |
-  | night (stars, moon, fireworks) | 103.5 / 240.4 | 105.1 / 243.9 | 194.3 / 476.1 | 196.0 / 478.0 |
+  | Segment | 1920 x 1080 GPU | wall |
+  |---|---|---|
+  | dawn (mist, low sun, the street) | 32.4 / 41.4 | 37.3 / 42.6 |
+  | water (the river's bank, the Staubbach) | 44.6 / 56.1 | 47.2 / 56.7 |
+  | noon (cumulus, Jungfrau, square, inn) | 45.8 / 58.3 | 49.4 / 58.9 |
+  | storm (storm cells, rain, lightning) | 66.0 / 82.2 | 70.1 / 83.2 |
+  | dusk (snowfall, lamps) | 33.6 / 39.3 | 33.7 / 39.9 |
+  | evening (snow into the night) | 22.9 / 24.0 | 23.0 / 24.4 |
+  | night (stars, moon, fireworks) | 26.6 / 32.4 | 26.8 / 32.8 |
 
-  The vegetation dominates since it came in (the frames took 16 to 20 ms at 1080p without it): some 32,000 trees
-  and as many shrubs, dwarf shrubs and flowers, all always in the scene (scatters following the viewer hit
-  true-sim/effects-vegetation#2), the trees cluster hierarchies from the generator's level 1 without impostors for
-  the far forest (true-sim/common-procedural#11), and the GPU grass. Each segment's first frames after a cut stall up
-  to 3.2 s (pipelines made as new effects first show). The night's fireworks are the heaviest effect: hundreds of
-  burst lights and their smoke lit per vertex.
+  Single frames stall up to 4.5 s in the daylight segments (pipelines made and assets streamed as a shot first shows
+  them); the film renders 30 frames at each cut's new place before it writes one. The fireworks' smoke is off until
+  effects-particles is built on engine 0.203 (true-sim/effects-particles#7). Ray-traced sun shadows and the GI probes
+  both run out of the 16 GB at this scene's size (true-sim/engine#478).
 
 ## Benchmarks
 
