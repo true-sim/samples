@@ -304,7 +304,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // terrain's pyramid refined to a pixel's error out to its range
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.RADIUS, 250f);
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PATCH_BUDGET, 4096);
-        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PLANT_BUDGET, 2048);
+        // the impostors' swaps to meshes and back keeping up with a fast camera (the flyover), more bakes a frame
+        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PLANT_BUDGET, 8192);
+        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.IMPOSTOR_BUDGET, 4);
         settings.set(game, com.truesim.effects.terrain.TerrainSettings.SCREEN_ERROR, 1f);
         settings.set(game, com.truesim.effects.terrain.TerrainSettings.BUILD_BUDGET, 128); // the flyover's tiles keep up
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.MAX_WIDEN, 4f);

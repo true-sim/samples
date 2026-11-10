@@ -231,9 +231,13 @@ public final class ShowcaseWorld implements AutoCloseable {
         return village.ready() && flora.ready() && renderer.assets().resources().loaded();
     }
 
-    /** Whether the ground's tiles the camera sees are built: the flyover starts from there, the rest streaming in. */
+    /**
+     * Whether the flyover may start: the ground's tiles of its first view built, and every plant's model, texture and
+     * impostor loaded and baked (else the near trees stood leafless and the impostors pale, baked before their
+     * textures were in); the village's cells and the terrain's finer tiles stream in as it flies.
+     */
     public boolean groundReady() {
-        return village.groundReady();
+        return village.groundReady() && flora.ready() && renderer.assets().resources().loaded();
     }
 
     /** What {@link #ready} still waits for (a pre-roll that timed out says so). */
