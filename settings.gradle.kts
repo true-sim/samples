@@ -14,20 +14,22 @@ pluginManagement {
 }
 
 plugins {
-    id("truesim.settings") version "0.15.0"
+    id("truesim.settings") version "0.19.1"
 }
 
 rootProject.name = "samples"
 
-include("samples-demo", "samples-bench")
+include("samples-demo", "samples-bench", "samples-showcase")
 project(":samples-demo").projectDir = file("demo")
 project(":samples-bench").projectDir = file("bench")
+project(":samples-showcase").projectDir = file("showcase")
 
 // Sibling checkouts build with these as one composite (a change across repos at once): ../engine, ../scene, ../ui and
 // the rest when present; -Ptruesim.<repo>=<path> points at another checkout (-Ptruesim.engine=../engine-split1),
 // -Ptruesim.<repo>=false uses the published artifact.
 val truesimRepos = listOf("build-logic", "common-math", "common-state", "common-jobs", "common-graph", "scene", "ui",
-    "engine", "effects-particles")
+    "engine", "effects-particles", "effects-atmosphere", "effects-weather", "effects-post", "effects-terrain",
+    "effects-vegetation", "common-procedural", "effects-water")
 for (repo in truesimRepos) {
     providers.gradleProperty("truesim.$repo").orElse("../$repo").get()
         .takeIf { file(it).isDirectory }?.let { includeBuild(it) }

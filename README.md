@@ -104,6 +104,86 @@ title shows the frame rate, GPU time, render size and display encoding. Settings
   culling, `N` a second window, `F5` or `Ctrl+S` save, `Escape` quit. A gamepad moves and looks with its sticks,
   rises and sinks with its shoulders and switches HDR, the tone curve, exposure and the render scale.
 
+## The showcase
+
+`showcase` (module `samples-showcase`) is the full demo: an Alpine village over one day in Lauterbrunnen, every
+effect of the engine and its libraries on at once, in physical units from noon to a moonlit night.
+
+- **Content, fetched on demand.** Poly Haven's CC0 textures (4K where the camera comes close: the
+  square's cobbles, the walls, the planks, the roofs, the parquet; 2K elsewhere) and models (street lamps, the inn's and houses' furniture,
+  barrels, crates, benches, stumps; bark, shingles, a rock face for the terrain's cliffs and the rocks), pinned in
+  [showcase/polyhaven.tsv](showcase/polyhaven.tsv) (URL, size, SHA-256) and credited in
+  [showcase/CREDITS.md](showcase/CREDITS.md): `./gradlew :samples-showcase:fetchAssets` downloads what the cache
+  (`~/.truesim/polyhaven`) lacks and checks every file. The terrain is effects-terrain's Lauterbrunnen site (swissALTI3D
+  2 m, Copernicus GLO-30/90 to the horizon): `./gradlew :samples-showcase:fetchTerrain` fills its cache
+  (`~/.truesim/terrain`). Nothing downloaded is committed; without the caches the village stands in plain colours in
+  a valley made from functions. Everything loads through the one asset manager (`ShowcaseAssets`: `ph://`,
+  `terrain://`, the star catalogue, post-processing's tables) and is drawn through the scene.
+- **The village**, made in code on the meadow below the Staubbach falls: chalets of stone and weathered planks with
+  wide eaves, balconies, shutters and chimneys, their ground floors rooms seen through framed glass (a hearth with a
+  fire, an armchair, a lamp; an indoor zone keeps the outdoor fog out), a café on a cobbled square with tall shop
+  windows, a polished parquet floor, a wall mirror and Poly Haven's ornate one (screen-space reflections, the probes'
+  and the environment's behind them), a church with a bell tower and spire, street lamps, lanterns, a gravel road,
+  fences and rocks. Placement asks the ground (`Ground`: effects-terrain's `heightAt`, or the made-up valley), never a
+  constant.
+- **The vegetation** (`Flora`): effects-vegetation's GPU grass over the valley floor (a `GrassField` on a ground map
+  cleared from the square, the buildings and the road, swaying in the day's wind, pressed by the dusk's snow), and
+  common-procedural's trees, shrubs, dwarf shrubs and flowers where its ecology puts them on Lauterbrunnen's terrain
+  (`Ecology` over effects-terrain's surface, meadows kept open below the forest; 21 species, three variants each,
+  generated for late September: rowan berries, ripe apples, the first leaves turning), one `PlantScatter` per species
+  and variant holding the ecology's instances. Trees are cluster hierarchies rebuilt from the generator's level 1
+  (`FloraModels`); their leaf atlases are drawn in code, their bark Poly Haven's. Generated meshes are cached in
+  `~/.truesim/procedural` (`-Pprocedural=<dir>`).
+- **Streaming** through scene-world: the terrain's own pyramid of tiles to 120 km, 64 m cells of buildings, lamps and
+  lights within 3 km and 32 m cells of small props within 250 m, one world, interest following the camera.
+- **The day** (`DayDriver`, 26 September 2026, a full moon): the sun, the moon and the stars from effects-atmosphere's
+  ephemeris for Lauterbrunnen; effects-weather's presets (fair, scattered cumulus with their shadows, rain under a
+  storm cell with lightning, broken cloud at dusk, clear), the weather's ground the valley floor
+  (`WeatherDomain.flat(ground)`); height fog and the valley's mist in fog volumes at dawn; snow falling (lit flakes that
+  flutter, `showcase.flutter`, a particle module of the showcase's own) and settling (`weather.snow`); rain; lamps,
+  rooms and hearths coming on; effects-particles-fireworks' show at night. Light is in the atmosphere's scene units:
+  the EV100 pre-exposure follows the day's light (eased), effects-post's histogram auto exposure takes the units
+  (`luminanceScale`, Krawczyk's key, -1.5 stops) as both libraries document; lamps, glowing glass and flames are set
+  from cd and cd/m² every frame.
+- **The chain** (`ShowcaseRenderer.view`): forward shading (or the visibility buffer, `-Pshading=visibility`),
+  sorted transparency with glass, the captured sky's light, clustered lights with PCSS-soft shadows (the sun's
+  four cascades), ambient occlusion, screen-space reflections, global illumination (the probe volume, or radiance
+  cascades with `-Pgi=cascades`), particles, the Hillaire sky with aerial perspective, volumetric fog in froxels,
+  snow, volumetric clouds with their shadow and lightning, then depth of field, bloom, a natural vignette, grading,
+  auto exposure, AgX (punchy) and subtle film grain. One shading-hook listing (`ShowcaseShadingHooks`) rebuilds the
+  libraries' shaders with every hook (the probes, aerial perspective, fog, snow) and the terrain's material.
+- **Two ways to run.** `./gradlew :samples-showcase:run [-Phour=7] [-Pweather=fair] [-Pquality=ultra]` flies
+  freely: W A S D, Q E, the right mouse button to look; `[` `]` the hour, `T` a time-lapse, `1`-`8` the weather, `B`
+  snow, `M` mist, `F` fireworks, `G` the global illumination, `P` the quality preset, `J` depth of field.
+  `./gradlew :samples-showcase:tour -Pout=<folder> [-Psize=1920x1080] [-Psegments=dawn,noon]` renders the scripted
+  tour (`TourScript`: dawn, the water, noon, storm, dusk, evening, night; spline cameras low through the meadow and
+  the streets, along the Weisse Lütschine's bank, before the Staubbach, towards the Jungfrau, through the inn's door,
+  the square in the rain and in snow, the fireworks over the village) as PNG frames at
+  60 Hz simulated, every second one written (30 fps; `ffmpeg -framerate 30 -i f_%05d.png ...` by hand);
+  `-Pmeasure=true` without `-Pout` reports each segment's frame times instead. The tour runs without global
+  illumination unless `-Pgi=probes` (or `cascades`) asks for it; the interactive app has the probes by default.
+  `-Pskip=fog,aerial,...` leaves passes out (environment, ao, ssr, gi, aerial, fog, clouds) to see what each does.
+- **What it costs** (`-Pmeasure=true -Pquality=ultra`; RX 9070 XT, Ryzen 9 9950X3D, 2026-11-10, engine 0.203, no
+  GI (as the film), cascaded sun shadows, 4K scans, the Lauterbrunnen terrain with its cliffs, 55,505 plants with
+  impostors, 54,000 rocks and the talus' scree; the tour at 60 Hz simulated, two frames in flight, nothing presented;
+  ms, mean / 99th percentile of each segment after its first second; GPU from the first pass to the last; one
+  process for all segments).
+
+  | Segment | 1920 x 1080 GPU | wall |
+  |---|---|---|
+  | dawn (mist, low sun, the street) | 32.4 / 41.4 | 37.3 / 42.6 |
+  | water (the river's bank, the Staubbach) | 44.6 / 56.1 | 47.2 / 56.7 |
+  | noon (cumulus, Jungfrau, square, inn) | 45.8 / 58.3 | 49.4 / 58.9 |
+  | storm (storm cells, rain, lightning) | 66.0 / 82.2 | 70.1 / 83.2 |
+  | dusk (snowfall, lamps) | 33.6 / 39.3 | 33.7 / 39.9 |
+  | evening (snow into the night) | 22.9 / 24.0 | 23.0 / 24.4 |
+  | night (stars, moon, fireworks) | 26.6 / 32.4 | 26.8 / 32.8 |
+
+  Single frames stall up to 4.5 s in the daylight segments (pipelines made and assets streamed as a shot first shows
+  them); the film renders 30 frames at each cut's new place before it writes one. The fireworks' smoke is off until
+  effects-particles is built on engine 0.203 (true-sim/effects-particles#7). Ray-traced sun shadows and the GI probes
+  both run out of the 16 GB at this scene's size (true-sim/engine#478).
+
 ## Benchmarks
 
 - `./gradlew :samples-bench:uiBench [-Pquick=true]` runs the UI's section 11 suite (GPU scenes from engine-ui's test
