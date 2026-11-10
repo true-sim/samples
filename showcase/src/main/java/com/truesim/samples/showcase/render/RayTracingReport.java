@@ -41,7 +41,15 @@ final class RayTracingReport {
                 built += (boolean) get(c, "built") ? 1 : 0;
                 perSource.merge(System.identityHashCode(t), 1, Integer::sum);
             }
-            return String.format(Locale.ROOT, "bottom levels %.1f MB in all; %d deformed copies (%d built) of %d "
+            String tops = "";
+            Object map = get(rays, "tops");
+            if (map instanceof java.util.Map<?, ?> m) {
+                for (Object t : m.values()) {
+                    tops += String.format(Locale.ROOT, "top level: room for %d instances, %d in its last build; ",
+                        (int) get(t, "maxInstances"), (int) get(t, "builtCount"));
+                }
+            }
+            return tops + String.format(Locale.ROOT, "bottom levels %.1f MB in all; %d deformed copies (%d built) of %d "
                     + "source meshes, %d triangles and %d vertices in all (largest copy %d triangles); scratch per "
                     + "build %.2f MB (x32 builds a frame), per refit %.2f MB (x every copy): %.1f MB asked",
                 bytes / 1e6, copies, built, perSource.size(), triangles, vertices, maxTriangles, build / 1e6,

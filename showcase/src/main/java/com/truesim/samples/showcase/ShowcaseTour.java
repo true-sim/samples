@@ -224,10 +224,16 @@ public final class ShowcaseTour {
 
     /** The camera at the shot's eye looking at its target, the scene updated, the world's frame. */
     private static void step(ShowcaseWorld world, CameraRig rig, DayState state, double[] eye, int height) {
-        rig.look(eye[0], eye[1], eye[2], eye[3], eye[4], eye[5]);
-        world.renderer().scene().update();
-        rig.update();
-        world.frame(1 / HZ, state, rig.camera(), height);
+        try {
+            rig.look(eye[0], eye[1], eye[2], eye[3], eye[4], eye[5]);
+            world.renderer().scene().update();
+            rig.update();
+            world.frame(1 / HZ, state, rig.camera(), height);
+        } catch (com.truesim.engine.vulkan.VulkanException e) {
+            System.out.println("Frame failed: " + e.getMessage() + "; ray tracing: "
+                + world.renderer().rayTracingReport());
+            throw e;
+        }
     }
 
     private static double tourTimeOf(TourScript script, TourScript.Segment segment) {
