@@ -135,9 +135,10 @@ public final class VillageEffects {
     }
 
     private static EffectData snow() {
-        float perSecond = 9000;
+        // heavy: 30,000 flakes a second at full rate about the camera, some 500,000 in the air, near ones too
+        float perSecond = 30000;
         return EffectData.builder().parameter(RATE, 1)
-            .emitter("flakes", e -> e.space(Space.WORLD).capacity(200_000)
+            .emitter("flakes", e -> e.space(Space.WORLD).capacity(600_000)
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(70, 4, 70), Init.velocity(Bind.random(-0.2f, 0.2f), Bind.random(-1.2f, -0.8f),
                     Bind.random(-0.2f, 0.2f)), Init.lifetime(Bind.random(16, 20)),
@@ -149,8 +150,9 @@ public final class VillageEffects {
                     Over.color(ColorGradient.builder().linear(0, 1, 1, 1, 0).linear(0.03f, 1, 1, 1, 1)
                         .linear(0.95f, 1, 1, 1, 1).linear(1, 1, 1, 1, 0).build()))
                 .collide(Collide.rays().orElse(Collide.height()).kill())
+                // lit per vertex by the lamps' and windows' lights (glittering in their cones), at least a pixel
                 .render(Renderer.billboard(Renderer.Facing.POSITION).lighting(Renderer.Lighting.PER_VERTEX)
-                    .set("soft", 0.05f).asset("texture", FxTextures.GLOW)))
+                    .set("soft", 0.05f).set("minPixels", 1f).asset("texture", FxTextures.GLOW)))
             .build(ShowcaseParticleModules.MODULES.registry());
     }
 
@@ -162,13 +164,16 @@ public final class VillageEffects {
                 .spawn(Spawn.rate(Bind.param(RATE).times(perSecond)))
                 .init(Shape.box(32, 3, 32), Init.velocity(Bind.random(-0.4f, 0.4f), Bind.random(-9.5f, -8),
                     Bind.random(-0.4f, 0.4f)), Init.lifetime(Bind.random(1.9f, 2.2f)),
-                    Init.size(Bind.random(0.012f, 0.02f)), Init.color(Bind.param(DROPS)))
+                    Init.size(Bind.random(0.018f, 0.028f)), Init.color(Bind.param(DROPS)))
                 .update(Forces.wind(0.5f))
                 .collide(Collide.rays().orElse(Collide.height()).kill())
                 // a drop shows the light it reflects and bends towards the eye (the sky's, the lamps', the windows'):
                 // added light, lit per vertex, a streak along its fall
                 .render(Renderer.billboard(Renderer.Facing.VELOCITY).additive().lighting(Renderer.Lighting.PER_VERTEX)
-                    .set("stretch", 0.12f).set("soft", 0.05f).asset("texture", FxTextures.EMBER)))
+                    // streaks some 0.6 m long at 9 m/s (stretch: extra sizes per m/s), at least a pixel and a half
+                    // across far off
+                    .set("stretch", 3.2f).set("minPixels", 1.5f).set("soft", 0.05f)
+                    .asset("texture", FxTextures.EMBER)))
             .build(ShowcaseParticleModules.MODULES.registry());
     }
 

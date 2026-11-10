@@ -81,10 +81,10 @@ public final class Village implements AutoCloseable {
     public static final Layer<Picked> PROPS = Layer.of("props", Picked.class, Levels.single(32));
 
     /** What the camera asks for: the village's layers, and the made-up valley's ground (effects-terrain follows itself). */
-    static InterestProfile camera(boolean ground) {
+    static InterestProfile camera(boolean ground, double props) {
         InterestProfile.Builder b = InterestProfile.builder()
-            .layer(BUILDINGS, Detail.full(), Range.radius(3000))
-            .layer(PROPS, Detail.full(), Range.radius(250));
+            .layer(BUILDINGS, Detail.full(), Range.radius(Math.max(3000, props)))
+            .layer(PROPS, Detail.full(), Range.radius(props));
         if (ground) {
             b.layer(GROUND, Detail.bands(380, 1500, 6000, 24000));
         }
@@ -267,7 +267,8 @@ public final class Village implements AutoCloseable {
         }
         world.register(BUILDINGS, new PickLoader(true));
         world.register(PROPS, new PickLoader(false));
-        camera = world.addInterest(camera(terrain == null), Priority.HIGH);
+        camera = world.addInterest(camera(terrain == null,
+            renderer.settings().get(com.truesim.samples.showcase.ShowcaseSettings.PROPS_RANGE)), Priority.HIGH);
     }
 
     /** Waits for Poly Haven's models (every cell spawns from them), at most {@code timeout}. */
@@ -566,9 +567,9 @@ public final class Village implements AutoCloseable {
             double dx = p.building.x() - x;
             double dz = p.building.z() - z;
             double d = Math.sqrt(dx * dx + dz * dz);
-            // level 1 nearest: level 0 (every leaf and flower of the geraniums) loads, as far as the cache says,
-            // but never draws (common-procedural#24)
-            int want = d < 220 ? 1 : d < 500 ? 2 : 3;
+            // the nearest level a setting (level 0: every leaf and flower of the geraniums)
+            int nearest = renderer.settings().get(com.truesim.samples.showcase.ShowcaseSettings.BUILDING_NEAREST);
+            int want = d < 60 ? nearest : d < 220 ? Math.max(nearest, 1) : d < 500 ? 2 : 3;
             // a little hysteresis: a level changes only once past its band by a tenth
             if (p.level >= 0 && Math.abs(want - p.level) == 1) {
                 double edge = switch (Math.min(want, p.level)) {

@@ -35,8 +35,34 @@ public final class ShowcaseSettings {
      */
     public static final Setting<String> SKIP = Setting.text("showcase.skip", "",
         "left out (debugging): environment, ao, ssr, gi, aerial, fog, clouds, plants");
+    /**
+     * The nearest buildings' level of detail, within 60 m (0: every leaf and flower of the geraniums).
+     */
+    public static final Setting<Integer> BUILDING_NEAREST = Setting.integer("showcase.buildingNearest", 0, 0, 3,
+        "the nearest buildings' level of detail (0 full)");
+    /** Metres a side of the region the trees, shrubs and rocks stand in, about the village (far: 4 km). */
+    public static final Setting<Float> TREES = Setting.decimal("showcase.trees", 4096f, 256f, 16_384f,
+        "metres a side of the trees' and rocks' region");
+    /** Metres a side of the dwarf shrubs' and herbs' region. */
+    public static final Setting<Float> HERBS = Setting.decimal("showcase.herbs", 1024f, 128f, 4096f,
+        "metres a side of the herbs' region");
+    /** Metres round the viewer the dwarf shrubs and herbs stand in. */
+    public static final Setting<Float> HERB_RADIUS = Setting.decimal("showcase.herbRadius", 150f, 10f, 1000f,
+        "metres round the viewer herbs stand in");
+    /** Metres a side of the grass's ground map (two texels a metre). */
+    public static final Setting<Float> GRASS_MAP = Setting.decimal("showcase.grassMap", 1536f, 256f, 4096f,
+        "metres a side of the grass's ground map");
+    /** Metres round the camera the village's props and their lights stream in. */
+    public static final Setting<Float> PROPS_RANGE = Setting.decimal("showcase.propsRange", 1000f, 50f, 10_000f,
+        "metres round the camera props stream in");
+    /**
+     * The engine's level-of-detail tint (MeshletRenderer.MODE_MESHLETS: a colour per meshlet, so the terrain's tiles,
+     * the impostors and meshes and their cluster levels show as they stream and refine), for the flyover's debug clip.
+     */
+    public static final Setting<Boolean> DEBUG_LOD = Setting.bool("showcase.debugLod", false,
+        "tint every meshlet by its cluster: levels of detail and streaming made visible");
     /** How far the sun's shadow cascades reach, metres, and how many there are. */
-    public static final Setting<Float> SHADOW_DISTANCE = Setting.decimal("showcase.shadowDistance", 3000f, 100f,
+    public static final Setting<Float> SHADOW_DISTANCE = Setting.decimal("showcase.shadowDistance", 6000f, 100f,
         50_000f, "metres the sun's shadow cascades reach");
     public static final Setting<Integer> SHADOW_CASCADES = Setting.integer("showcase.shadowCascades", 6, 1, 8,
         "the sun's shadow cascades");
@@ -83,7 +109,8 @@ public final class ShowcaseSettings {
         "measure frame times per segment of the tour (GPU timestamps)");
 
     /** Every one of them. */
-    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, SKIP, SHADOW_DISTANCE,
+    public static final List<Setting<?>> ALL = List.of(ASSETS, TERRAIN, PROCEDURAL, SUN_SHADOWS, SKIP, BUILDING_NEAREST, TREES, HERBS, HERB_RADIUS, GRASS_MAP,
+        PROPS_RANGE, DEBUG_LOD, SHADOW_DISTANCE,
         SHADOW_CASCADES, QUALITY, HOUR, WEATHER, SIZE, OUT, SEGMENTS,
         EVERY, PACE, STILLS, SECONDS, GI, SHADING, MEASURE);
 

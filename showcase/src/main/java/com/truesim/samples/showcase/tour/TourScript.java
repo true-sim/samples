@@ -28,12 +28,32 @@ import java.util.List;
 public final class TourScript {
 
     /** A shot: when it starts in its segment and its move. */
-    public record Shot(String name, double start, CameraSpline spline) {
+    public record Shot(String name, double start, CameraSpline spline, double fov) {
+
+        /** The tour's usual lens: 55 degrees vertically. */
+        public static final double FOV = 55;
+
+        public Shot(String name, double start, CameraSpline spline) {
+            this(name, start, spline, FOV);
+        }
+
+        /** This shot through a lens of {@code degrees} vertically. */
+        public Shot wide(double degrees) {
+            return new Shot(name, start, spline, degrees);
+        }
     }
 
-    /** A segment: its shots and its day keys (segment seconds, state). */
+    /**
+     * A segment: its shots and its day keys (segment seconds, state); {@code live}: filmed as the world streams in (no
+     * waiting for it before the first frame: the flyover).
+     */
     public record Segment(String name, double duration, List<Shot> shots, List<double[]> keys,
-        java.util.function.Consumer<DayState> base) {
+        java.util.function.Consumer<DayState> base, boolean live) {
+
+        public Segment(String name, double duration, List<Shot> shots, List<double[]> keys,
+            java.util.function.Consumer<DayState> base) {
+            this(name, duration, shots, keys, base, false);
+        }
 
         /** The state at {@code t} seconds into the segment: the base, then the keys interpolated. */
         public void state(double t, DayState out) {
@@ -121,6 +141,23 @@ public final class TourScript {
     /** The segments and their shots. */
     private void build() {
         // keys: t, hour, fog, mist, snowfall, snowCover, rain, lamps, rooms
+        if (real) {
+            // the opening: in from high over the Thun lake's side, 30 km off, down the Lütschine's valley to the
+            // village's meadow, where the dawn takes over; the world streams in as it flies (terrain tiles refining,
+            // the forest from impostors to meshes, the village's cells)
+            segments.add(new Segment("flyover", 60, List.of(flyover("flyover", 0, 60)),
+                List.of(new double[] {0, 6.75, 0.0012, 0.006, 0, 0, 0, 1, 0.6}, new double[] {60, 6.94, 0.0012, 0.006,
+                    0, 0, 0, 1, 0.6}),
+                s -> {
+                    s.weather = WeatherPreset.FAIR;
+                    s.weatherRate = 6;
+                    s.fogFalloff = 0.03;
+                    s.fires = true;
+                    s.storm = false;
+                    s.fireworks = false;
+                    s.fStop = 16;
+                }, true));
+        }
         segments.add(new Segment("dawn", 32, List.of(
             shot("meadow", 0, 17, new double[][] {
                 {0, 12, 3.5, 205, 0, 8, 0}, {17, 6, 3, 128, 4, 8, -10}}),
@@ -196,14 +233,12 @@ public final class TourScript {
                 s.fireworks = false;
                 s.fStop = 16;
             }));
-        segments.add(new Segment("dusk", 36, List.of(
+        // dusk: the lamps, windows and hearths coming on, the village still bare (green meadows, dark roofs)
+        segments.add(new Segment("dusk", 18, List.of(
             shot("street at dusk", 0, 18, new double[][] {
-                {0, -3.2, 2.3, 78, 0, 3, 20}, {18, -1.8, 2.1, 34, 2, 3, -10}}),
-            shot("square in snow", 18, 18, new double[][] {
-                {0, -14, 5.5, 10, 2, 1.5, -6}, {9, -6, 4.5, 11.5, 4, 1.5, -8}, {18, 6, 4, 10, 2, 1.5, -10}})),
-            // a light snowfall settling: a dusting on the roofs and the square by the evening
-            List.of(new double[] {0, 19.05, 0.0003, 0, 0.4, 0.05, 0, 1, 1}, new double[] {14, 19.25, 0.0004, 0, 0.8,
-                0.2, 0, 1, 1}, new double[] {36, 19.55, 0.0005, 0, 0.9, 0.35, 0, 1, 1}),
+                {0, -3.2, 2.3, 78, 0, 3, 20}, {18, -1.8, 2.1, 34, 2, 3, -10}})),
+            List.of(new double[] {0, 19.05, 0.0003, 0, 0, 0, 0, 1, 1}, new double[] {18, 19.3, 0.0004, 0, 0, 0, 0,
+                1, 1}),
             s -> {
                 s.weather = WeatherPreset.BROKEN; // snow showers from a broken deck, the afterglow in its gaps
                 s.weatherRate = 3;
@@ -213,12 +248,30 @@ public final class TourScript {
                 s.fireworks = false;
                 s.fStop = 8;
             }));
-        // the evening: still snowing as the night comes on, the snow easing off
+        // the snowfall: over the square to the church, chalets either side, a heavy snowfall starts and the village
+        // goes from bare to white, the cover a time-lapse over the shot while the flakes fall at their own speed, lit
+        // by the lamps and windows
+        segments.add(new Segment("snowfall", 30, List.of(
+            shot("snowfall over the square", 0, 30, new double[][] {
+                {0, -6, 8, 46, 0, 4, -20}, {30, 2, 7, 38, 2, 4, -22}})),
+            List.of(new double[] {0, 19.4, 0.0004, 0, 0.15, 0, 0, 1, 1}, new double[] {4, 19.45, 0.0005, 0, 1, 0, 0,
+                1, 1}, new double[] {27, 19.75, 0.0006, 0, 1, 1, 0, 1, 1}, new double[] {30, 19.8, 0.0006, 0, 1, 1, 0,
+                1, 1}),
+            s -> {
+                s.weather = WeatherPreset.OVERCAST; // a snow deck closing in
+                s.weatherRate = 3;
+                s.fogFalloff = 0.02;
+                s.fires = true;
+                s.storm = false;
+                s.fireworks = false;
+                s.fStop = 8;
+            }));
+        // the evening: still snowing as the night comes on, the snow easing off, the village white
         segments.add(new Segment("evening", 18, List.of(
             shot("evening snow", 0, 18, new double[][] {
                 {0, 1.5, 3.2, 55, 0, 2.5, 0}, {18, 0.5, 3.0, 26, -2, 2.5, -12}})),
-            List.of(new double[] {0, 21.6, 0.0005, 0, 0.8, 0.4, 0, 1, 1}, new double[] {12, 21.9, 0.0004, 0, 0.25,
-                0.45, 0, 1, 1}, new double[] {18, 22.0, 0.0004, 0, 0, 0.45, 0, 1, 1}),
+            List.of(new double[] {0, 21.6, 0.0005, 0, 0.8, 1, 0, 1, 1}, new double[] {12, 21.9, 0.0004, 0, 0.25,
+                1, 0, 1, 1}, new double[] {18, 22.0, 0.0004, 0, 0, 1, 0, 1, 1}),
             s -> {
                 s.weather = WeatherPreset.BROKEN;
                 s.weatherRate = 3;
@@ -228,13 +281,15 @@ public final class TourScript {
                 s.fireworks = false;
                 s.fStop = 8;
             }));
-        // the night: the sky cleared, the moon up; the show over the village, framed across its roofs
+        // the night: the sky cleared, the moon up; the show over the village, the roofs, the church and the lit square
+        // the frame's lower third, the bursts (up to some 230 m up and 70 m across: 7-inch shells, their trails and
+        // smoke above) whole in the sky with room round them: a wide lens (75 degrees) looking well up
         segments.add(new Segment("night", 34, List.of(
             shot("over the village", 0, 17, new double[][] {
-                {0, 0, 14, 80, 40, 55, -150}, {17, -3, 13, 68, 45, 60, -150}}), // the show east of the wall
-            shot("from the square", 17, 17, new double[][] {
-                {0, -7, 2.0, 9, 25, 45, -150}, {17, -3, 2.2, 5, 28, 50, -150}})),
-            List.of(new double[] {0, 23.3, 0.0004, 0, 0, 0.45, 0, 1, 1}, new double[] {34, 23.6, 0.0004, 0, 0, 0.45,
+                {0, 0, 25, 120, 40, 110, -150}, {17, -4, 24, 110, 45, 108, -150}}).wide(75), // 270 m off, 25 m up
+            shot("from the street", 17, 17, new double[][] {
+                {0, -6, 6, 40, 40, 107, -150}, {17, -3, 6, 30, 45, 105, -150}}).wide(75)),
+            List.of(new double[] {0, 23.3, 0.0004, 0, 0, 1, 0, 1, 1}, new double[] {34, 23.6, 0.0004, 0, 0, 1,
                 0, 1, 1}),
             s -> {
                 s.weather = WeatherPreset.CLEAR;
@@ -299,45 +354,60 @@ public final class TourScript {
         return v * v;
     }
 
-    /** The river shot's keys along the bank: (t, metres along, eye height). */
-    private static final double[][] RIVER = {{0, -12, 0.9}, {15, 6, 0.7}};
+    /**
+     * The river shot's keys: t, metres along the river, aside from its line as a share of its half width, eye height
+     * over the bed, and the metres along where it looks at the water: low over the water itself, moving downstream,
+     * the surface with its reflections and foam filling the frame's lower half, the banks either side.
+     */
+    private static final double[][] RIVER = {{0, -8, 0.2, 5.0, 4}, {15, 8, 0.1, 4.5, 16}};
 
-    /** 0 within 3 m of the river shot's way along {@code bank} (see {@link #water}), 1 from 4 m; 1 without one. */
+    /**
+     * 0 along the river shot's stretch of {@code bank} to 3 m beyond either edge (no tree or shrub over the water before
+     * the camera), 1 a metre further; 1 without a bank.
+     */
     public static double riverPath(double[] bank, double x, double z) {
         if (bank == null) {
             return 1;
         }
-        double side = bank[4] + 2.5;
-        double px = x - (bank[0] - bank[3] * side);
-        double pz = z - (bank[1] + bank[2] * side);
-        double along = Math.clamp(px * bank[2] + pz * bank[3], RIVER[0][1] - 3, RIVER[1][1] + 3);
-        double qx = px - bank[2] * along;
-        double qz = pz - bank[3] * along;
-        double d = Math.sqrt(qx * qx + qz * qz);
-        return Math.clamp(d - 3, 0, 1);
+        double px = x - bank[0];
+        double pz = z - bank[1];
+        double along = px * bank[2] + pz * bank[3];
+        double aside = -px * bank[3] + pz * bank[2]; // towards the camera's side
+        double out = Math.max(Math.max(RIVER[0][1] - 4 - along, along - RIVER[1][4] - 4),
+            Math.max(-aside - bank[4] - 3, aside - bank[4] - 3));
+        return Math.clamp(out, 0, 1);
     }
 
-    /** Low along the river's bank downstream, the water's surface, its stones and foam ahead. */
+    /** From the river's bank, a few metres up, moving downstream with it: the water, its reflections and foam. */
     private Shot river(String name, double start) {
         CameraSpline spline = new CameraSpline(true);
         double x = bank[0];
         double z = bank[1];
         double dx = bank[2];
         double dz = bank[3];
-        double side = bank[4] + 2.5; // on the bank, beside the water
         double sx = -dz;
         double sz = dx;
-        for (double[] k : RIVER) {
-            double ex = x + dx * k[1] + sx * side;
-            double ez = z + dz * k[1] + sz * side;
-            double tx = x + dx * (k[1] + 22) + sx * bank[4] * 0.2;
-            double tz = z + dz * (k[1] + 22) + sz * bank[4] * 0.2;
-            spline.key(k[0], ex, ground.height(ex, ez) + k[2], ez, tx, ground.height(tx, tz) + 0.2, tz);
+        for (int n = 0; n < RIVER.length; n++) {
+            double[] k = RIVER[n];
+            double ex = x + dx * k[1] + sx * bank[4] * k[2];
+            double ez = z + dz * k[1] + sz * bank[4] * k[2];
+            double tx = x + dx * k[4];
+            double tz = z + dz * k[4];
+            if (bank.length >= 13) { // along the channel's own bends: over the water at either end
+                ex = bank[5 + 2 * n];
+                ez = bank[6 + 2 * n];
+                tx = bank[9 + 2 * n];
+                tz = bank[10 + 2 * n];
+            }
+            spline.key(k[0], ex, ground.height(ex, ez) + k[3], ez, tx, ground.height(tx, tz), tz);
         }
         return new Shot(name, start, spline);
     }
 
-    /** Before the tallest fall, from the meadow: the sheet down the wall and its spray at the foot, closing in. */
+    /**
+     * Before the tallest fall's foot, off to one side and crossing it (as effects-water's own film frames it): the spray
+     * and mist at the foot first, then looking up the veil to the lip.
+     */
     private Shot staubbach(String name, double start) {
         CameraSpline spline = new CameraSpline(true);
         double ax = fall[0] - fall[3];
@@ -345,12 +415,41 @@ public final class TourScript {
         double l = Math.max(Math.sqrt(ax * ax + az * az), 1e-6);
         ax /= l; // away from the cliff, the way the water falls out
         az /= l;
-        double[][] keys = {{0, 230, 8}, {15, 190, 6}}; // from the meadow: the whole fall, its spray at the foot
+        // (t, metres out, metres aside, eye height, target height over the foot)
+        double[][] keys = {{0, 105, 25, 10, 50}, {15, 85, 40, 10, 170}};
         for (double[] k : keys) {
-            double ex = fall[0] + ax * k[1];
-            double ez = fall[2] + az * k[1];
-            double ty = fall[1] + (fall[4] - fall[1]) * 0.45;
-            spline.key(k[0], ex, ground.height(ex, ez) + k[2], ez, fall[3], ty, fall[5]);
+            double ex = fall[0] + ax * k[1] - az * k[2];
+            double ez = fall[2] + az * k[1] + ax * k[2];
+            spline.key(k[0], ex, ground.height(ex, ez) + k[3], ez, fall[0], fall[1] + k[4], fall[2]);
+        }
+        return new Shot(name, start, spline);
+    }
+
+    /**
+     * The flyover: world keys far out (t, x, height over the ground, z, toward the village), slowing as it nears, then
+     * the street's frame to the dawn's first pose (its meadow shot's start), so the dawn follows without a cut.
+     */
+    private Shot flyover(String name, double start, double duration) {
+        CameraSpline spline = new CameraSpline(true);
+        double[] village = new double[2];
+        onStreet(0, 0, village);
+        double vy = ground.height(village[0], village[1]) + 30;
+        // north is -z: the Thun lake's side some 30 km north-north-west, Interlaken 10 km north, the valley's mouth
+        double[][] far = {{0, -9000, 3500, -28000}, {14, -3500, 2200, -14000}, {28, -600, 1000, -6000},
+            {40, -250, 350, -2200}};
+        for (double[] k : far) {
+            double x = village[0] + k[1];
+            double z = village[1] + k[3];
+            spline.key(k[0], x, ground.height(x, z) + k[2], z, village[0], vy, village[1]);
+        }
+        double[] eye = new double[2];
+        double[] target = new double[2];
+        double[][] near = {{50, 10, 45, 520, 0, 10, 0}, {duration, 12, 3.5, 205, 0, 8, 0}}; // the dawn's first key
+        for (double[] k : near) {
+            onStreet(k[1], k[3], eye);
+            onStreet(k[4], k[6], target);
+            spline.key(k[0], eye[0], ground.height(eye[0], eye[1]) + k[2], eye[1], target[0],
+                ground.height(target[0], target[1]) + k[5], target[1]);
         }
         return new Shot(name, start, spline);
     }

@@ -41,7 +41,8 @@ public final class ShowcaseProbe {
         String out = settings.get(ShowcaseSettings.OUT);
         try (VulkanInstance instance = VulkanInstance.builder().applicationName("showcase probe").surfaces(false)
                  .build();
-             VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
+             VulkanDevice device = com.truesim.samples.showcase.render.ShowcaseHooks.installed(
+                 VulkanDevice.createHeadless(instance.bestGpu()));
              FrameGraph graph = new FrameGraph(device, 2)) {
             graph.settings(settings);
             ValleyGround ground = new ValleyGround();

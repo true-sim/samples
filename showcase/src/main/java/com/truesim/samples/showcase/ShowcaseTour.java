@@ -66,7 +66,8 @@ public final class ShowcaseTour {
         VulkanInstance.Builder builder = VulkanInstance.builder().applicationName("showcase tour").surfaces(false)
             .validation(validation);
         try (VulkanInstance instance = builder.build();
-             VulkanDevice device = VulkanDevice.createHeadless(instance.bestGpu());
+             VulkanDevice device = com.truesim.samples.showcase.render.ShowcaseHooks.installed(
+                 VulkanDevice.createHeadless(instance.bestGpu()));
              FrameGraph graph = new FrameGraph(device, 2).timings(measure)) {
             graph.settings(settings);
             System.out.println("GPU: " + device.gpu().name() + (validation ? " (validation asked by environment)" : ""));
@@ -82,6 +83,9 @@ public final class ShowcaseTour {
                 double[] eye = new double[6];
                 double tourTime = 0;
                 List<String> report = new ArrayList<>();
+                // -Pmeasure: the engine's profiler records each segment (frame clock, CPU zones, GPU passes)
+                com.truesim.samples.showcase.tour.TourProfile profile = measure
+                    ? new com.truesim.samples.showcase.tour.TourProfile(device, graph, settings) : null;
                 try (FrameCapture capture = new FrameCapture(device, port); stats) {
                     for (TourScript.Segment segment : script.segments()) {
                         if (!wanted.isEmpty() && !wanted.contains(segment.name())) {
@@ -95,26 +99,39 @@ public final class ShowcaseTour {
                         int settled = 0;
                         while (settled < SETTLE * HZ) {
                             segment.state(0, state);
+                            state.fireworks = false; // the show starts with the film, not while it loads
                             TourScript.Shot shot = segment.shot(0);
                             shot.spline().at(0, eye);
+                            rig.fov(Maths.toRadians(shot.fov()));
                             step(world, rig, state, eye, height);
                             graph.beginFrame();
-                            graph.submit(0, 0);
-                            if (world.ready() || System.nanoTime() - started > 400_000_000_000L) { // a cold start loads the forest
+                            try {
+                                graph.submit(0, 0);
+                            } catch (com.truesim.engine.vulkan.VulkanException e) {
+                                System.out.println("Frame failed: " + e.getMessage() + "; ray tracing: "
+                                    + world.renderer().rayTracingReport());
+                                throw e;
+                            }
+                            // a cold start loads the forest; the flyover streams live: no wait, only the settling
+                            if (segment.live() || world.ready() || System.nanoTime() - started > 400_000_000_000L) {
                                 settled++;
                             } else {
                                 waited++;
                                 Thread.sleep(1);
                             }
                         }
-                        System.out.printf(Locale.ROOT, "%s: loaded in %d frames (%.1f s)%n", segment.name(), waited,
-                            (System.nanoTime() - started) / 1e9);
+                        System.out.printf(Locale.ROOT, "%s: loaded in %d frames (%.1f s)%s%n", segment.name(), waited,
+                            (System.nanoTime() - started) / 1e9, world.ready() ? "" : "; timed out waiting for: "
+                                + world.waitingFor());
                         int frames = (int) Math.round(segment.duration() * HZ / pace);
                         double[] wall = new double[frames];
                         double[] cpu = new double[frames];
                         double[] gpu = new double[frames];
                         Arrays.fill(gpu, Double.NaN);
                         long lastTimed = -1;
+                        if (profile != null) {
+                            profile.segment(segment.name());
+                        }
                         TourScript.Shot previousShot = null;
                         long previous = System.nanoTime();
                         int written = 0;
@@ -126,6 +143,7 @@ public final class ShowcaseTour {
                             segment.state(t, state);
                             TourScript.Shot shot = segment.shot(t);
                             shot.spline().at(t - shot.start(), eye);
+                            rig.fov(Maths.toRadians(shot.fov()));
                             if (folder != null && previousShot != null && shot != previousShot) {
                                 // a cut: frames at the new place first, written none, so what streams in for it
                                 // (building levels, terrain, the temporal history) is there in its first frame
@@ -137,10 +155,22 @@ public final class ShowcaseTour {
                                 previous = System.nanoTime();
                             }
                             previousShot = shot;
+                            if (profile != null) {
+                                profile.frameStart();
+                            }
                             step(world, rig, state, eye, height);
                             graph.beginFrame();
-                            graph.submit(0, 0);
+                            try {
+                                graph.submit(0, 0);
+                            } catch (com.truesim.engine.vulkan.VulkanException e) {
+                                System.out.println("Frame failed: " + e.getMessage() + "; ray tracing: "
+                                    + world.renderer().rayTracingReport());
+                                throw e;
+                            }
                             cpu[f] = (System.nanoTime() - start) / 1e6;
+                            if (profile != null) {
+                                profile.frameEnd();
+                            }
                             GpuTimings timings = graph.timings();
                             if (timings != null && timings.frame() != lastTimed) {
                                 lastTimed = timings.frame();
@@ -169,6 +199,7 @@ public final class ShowcaseTour {
                         device.waitIdle();
                         if (measure) {
                             report.add(row(segment.name(), width, height, wall, cpu, gpu));
+                            System.out.println(segment.name() + ": recorded into " + profile.finish());
                         }
                         tourTime += segment.duration();
                     }
@@ -182,6 +213,8 @@ public final class ShowcaseTour {
                     System.out.printf(Locale.ROOT, "Frame times at %d x %d (%s), ms: mean, 99th percentile, worst%n",
                         width, height, settings.get(ShowcaseSettings.QUALITY));
                     report.forEach(System.out::println);
+                    System.out.println("Where the time goes (the engine's profiler; ms per frame):");
+                    profile.report().forEach(System.out::println);
                 }
             }
         }

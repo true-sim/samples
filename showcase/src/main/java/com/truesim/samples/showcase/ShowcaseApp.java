@@ -63,6 +63,16 @@ public final class ShowcaseApp implements Application, PlatformListener {
     private boolean misty;
     private double titleAt;
 
+    /** The profiler's UI: the default theme, the bundled fonts. */
+    private static com.truesim.ui.controls.Ui ui(com.truesim.ui.core.draw.UiTextures ignored) {
+        var backend = new com.truesim.ui.text.natives.NativeTextBackend();
+        var textures = new com.truesim.ui.core.draw.UiTextures();
+        var text = new com.truesim.ui.text.TextSystem(com.truesim.ui.fonts.BundledFonts.registry(backend),
+            backend.newShaper(), new com.truesim.ui.text.GlyphAtlas(textures, backend.msdfGenerator(),
+                backend.newRasterizer(), null, null, new com.truesim.ui.text.AtlasSettings()));
+        return new com.truesim.ui.controls.Ui(com.truesim.ui.style.tss.Tss.defaultTheme(), text, textures);
+    }
+
     public static void main(String[] args) {
         TrueSim.run(new ShowcaseApp(), args);
     }
@@ -70,13 +80,18 @@ public final class ShowcaseApp implements Application, PlatformListener {
     @Override
     public void configure(AppConfig app) {
         app.id("truesim-showcase").name("true-sim showcase")
-            .use(new Desktop(), new Input().add(ShowcaseActions.SHOWCASE), new Rendering(), world);
+            .use(new Desktop(), new Input().add(ShowcaseActions.SHOWCASE), new Rendering(),
+                new com.truesim.engine.graph.Profiling(), world)
+            // the engine's profiler: F3 the frame graph overlay, Shift+F3 the timeline (CPU zones per thread and the
+            // GPU's passes on one clock), F4 freeze, Shift+F4 one frame, Ctrl+F4 export (.tsprof and Chrome JSON)
+            .use(new com.truesim.engine.ui.UiPlugin(ShowcaseApp::ui).view("main"));
     }
 
     @Override
     public void start(Engine started) {
         engine = started;
         engine.get(Desktop.KEY).listen(this);
+        engine.get(com.truesim.engine.ui.UiPlugin.KEY).profiler();
         input = engine.get(Input.KEY);
         player = input.player(0);
         looking = input.context("looking", 10).mouse(MouseMode.CAPTURED);
@@ -230,7 +245,7 @@ public final class ShowcaseApp implements Application, PlatformListener {
                 return;
             }
             Rendering rendering = startup.get(Rendering.KEY);
-            VulkanDevice device = rendering.device();
+            VulkanDevice device = com.truesim.samples.showcase.render.ShowcaseHooks.installed(rendering.device());
             FrameGraph graph = rendering.graph();
             assets = ShowcaseAssets.standalone(device, graph.frameSlots(), startup.settings());
             try {

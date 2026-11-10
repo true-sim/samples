@@ -107,8 +107,13 @@ class ShowcasePlanTest {
         }
         script.segment("night").state(0, state);
         assertThat(state.fireworks).isTrue();
-        assertThat(state.snowCover).as("the dusk's dusting of snow still lies").isGreaterThan(0.3);
+        assertThat(state.snowCover).as("the village white under the snow").isGreaterThan(0.95);
         assertThat(state.snowfall).as("the snow has eased off before the show").isZero();
+        script.segment("snowfall").state(0, state);
+        assertThat(state.snowCover).as("the snowfall starts on a bare village").isZero();
+        assertThat(state.lamps).as("the lamps on as it starts").isGreaterThan(0.9);
+        script.segment("snowfall").state(30, state);
+        assertThat(state.snowCover).as("and ends with it white").isGreaterThan(0.95);
         script.segment("evening").state(0, state);
         assertThat(state.snowfall).as("still snowing as the night comes on").isGreaterThan(0.5);
         assertThat(state.fireworks).isFalse();

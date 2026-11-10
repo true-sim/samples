@@ -1,25 +1,10 @@
 package com.truesim.samples.showcase;
 
 import com.truesim.common.math.Maths;
-import com.truesim.engine.graph.FrameGraph;
-import com.truesim.engine.settings.EngineSettings;
-import com.truesim.engine.graph.ViewPort;
-import com.truesim.engine.render.Camera;
-import com.truesim.engine.render.SceneView;
-import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.common.procedural.assets.GenerationCache;
 import com.truesim.common.procedural.assets.ProceduralAssets;
 import com.truesim.common.procedural.assets.SettlementSettings;
 import com.truesim.common.procedural.assets.WaterAssets;
-import com.truesim.common.procedural.water.WaterNetwork;
-import com.truesim.common.procedural.water.WaterRegion;
-import com.truesim.common.procedural.water.WaterSettings;
-import com.truesim.effects.water.WaterMaterials;
-import com.truesim.effects.water.WaterScene;
-import com.truesim.effects.water.WaterTerrain;
-import com.truesim.effects.water.WaterWetness;
-import com.truesim.effects.water.materials.FallingWaterParameters;
-import com.truesim.effects.water.materials.FlowingWaterParameters;
 import com.truesim.common.procedural.ecology.AlpineSpecies;
 import com.truesim.common.procedural.ecology.Ecology;
 import com.truesim.common.procedural.ecology.EcologyParameters;
@@ -29,11 +14,29 @@ import com.truesim.common.procedural.ecology.rocks.RockFieldParameters;
 import com.truesim.common.procedural.ecology.rocks.RockScatter;
 import com.truesim.common.procedural.ecology.terrain.TalusModifier;
 import com.truesim.common.procedural.ecology.terrain.TerrainEcology;
-import com.truesim.common.procedural.settlement.terrain.SettlementTerrain;
-import com.truesim.effects.terrain.data.TerrainModifier;
-import com.truesim.effects.terrain.data.TerrainModifiers;
 import com.truesim.common.procedural.settlement.Settlement;
 import com.truesim.common.procedural.settlement.Settlements;
+import com.truesim.common.procedural.settlement.terrain.SettlementTerrain;
+import com.truesim.common.procedural.water.WaterNetwork;
+import com.truesim.common.procedural.water.WaterRegion;
+import com.truesim.common.procedural.water.WaterSettings;
+import com.truesim.effects.terrain.data.TerrainAssets;
+import com.truesim.effects.terrain.data.TerrainModifier;
+import com.truesim.effects.terrain.data.TerrainModifiers;
+import com.truesim.effects.terrain.data.TerrainSite;
+import com.truesim.effects.water.WaterMaterials;
+import com.truesim.effects.water.WaterScene;
+import com.truesim.effects.water.WaterTerrain;
+import com.truesim.effects.water.WaterWetness;
+import com.truesim.effects.water.materials.FallingWaterParameters;
+import com.truesim.effects.water.materials.FlowingWaterParameters;
+import com.truesim.engine.app.profile.Profiler;
+import com.truesim.engine.graph.FrameGraph;
+import com.truesim.engine.graph.ViewPort;
+import com.truesim.engine.render.Camera;
+import com.truesim.engine.render.SceneView;
+import com.truesim.engine.settings.EngineSettings;
+import com.truesim.engine.vulkan.VulkanDevice;
 import com.truesim.samples.showcase.assets.NamedMaterials;
 import com.truesim.samples.showcase.assets.ShowcaseAssets;
 import com.truesim.samples.showcase.assets.Surfaces;
@@ -45,8 +48,6 @@ import com.truesim.samples.showcase.render.ShowcaseRenderer;
 import com.truesim.samples.showcase.world.Ground;
 import com.truesim.samples.showcase.world.TerrainGround;
 import com.truesim.samples.showcase.world.ValleyGround;
-import com.truesim.effects.terrain.data.TerrainAssets;
-import com.truesim.effects.terrain.data.TerrainSite;
 import com.truesim.samples.showcase.world.Village;
 import com.truesim.samples.showcase.world.VillageLayout;
 import com.truesim.scene.assets.AssetRef;
@@ -147,7 +148,7 @@ public final class ShowcaseWorld implements AutoCloseable {
         // the river's close-up walks its bank: no tree or shrub on the camera's way
         double[] bank = riverBank();
         flora = new Flora(renderer, ground, layout, placing, rocks, named, procedural,
-            (x, z) -> com.truesim.samples.showcase.tour.TourScript.riverPath(bank, x, z));
+            (x, z) -> com.truesim.samples.showcase.tour.TourScript.riverPath(bank, x, z), rivers);
         if (rivers != null && !rivers.falls().isEmpty()) {
             // the talus' small stones round the Staubbach's foot (the water's close-up): single stones near the
             // camera's way, patches beyond
@@ -160,7 +161,9 @@ public final class ShowcaseWorld implements AutoCloseable {
         if (rivers != null) {
             WaterMaterials.register(assets.resources().materials());
             WaterScene.Look look = WaterScene.Look.of(WaterMaterials.river(FlowingWaterParameters.DEFAULTS).ref(),
-                WaterMaterials.sheet(FallingWaterParameters.DEFAULTS).ref(),
+                // the falls as veils: thinner where whole, their sides thinning in over most of the half width
+                WaterMaterials.sheet(FallingWaterParameters.DEFAULTS.withOpacity(0.7f).withEdge(0.65f)
+                    .withVeil(0.35f)).ref(),
                 WaterMaterials.jets(FallingWaterParameters.DEFAULTS).ref(), surfaces.scan(Surfaces.LIMESTONE));
             // the materials loaded first: the falls displace, so theirs must be there before their nodes
             for (var m : List.of(look.river(), look.sheet(), look.jets())) {
@@ -201,17 +204,37 @@ public final class ShowcaseWorld implements AutoCloseable {
      * it, the day's lights, weather and effects, then the renderer's syncs. Before the graph records.
      */
     public void frame(double seconds, DayState state, Camera camera, double viewportHeight) {
+        Profiler.begin(VILLAGE_ZONE);
         village.update(camera.position(0), camera.position(1), camera.position(2), Maths.toRadians(60),
             viewportHeight);
+        Profiler.end(VILLAGE_ZONE);
+        Profiler.begin(DAY_ZONE);
         day.apply(state, camera, seconds);
+        Profiler.end(DAY_ZONE);
+        Profiler.begin(FLORA_ZONE);
         flora.update(state, camera, seconds);
+        Profiler.end(FLORA_ZONE);
         renderer.indoors(layout.inside(camera.position(0), camera.position(2)) != null);
+        Profiler.begin(RENDERER_ZONE);
         renderer.update(seconds, seconds * state.weatherRate, DayDriver.gameSeconds(state), camera);
+        Profiler.end(RENDERER_ZONE);
     }
+
+    // the showcase's own CPU zones in the engine's profiler (the app's timeline, the measured tour's recordings)
+    private static final com.truesim.engine.app.profile.Zone VILLAGE_ZONE = Profiler.zone("showcase.village");
+    private static final com.truesim.engine.app.profile.Zone DAY_ZONE = Profiler.zone("showcase.day");
+    private static final com.truesim.engine.app.profile.Zone FLORA_ZONE = Profiler.zone("showcase.flora");
+    private static final com.truesim.engine.app.profile.Zone RENDERER_ZONE = Profiler.zone("showcase.renderer");
 
     /** Whether the streamed content about the camera and everything it asked of the GPU is there. */
     public boolean ready() {
         return village.ready() && flora.ready() && renderer.assets().resources().loaded();
+    }
+
+    /** What {@link #ready} still waits for (a pre-roll that timed out says so). */
+    public String waitingFor() {
+        return "village " + village.ready() + ", plant models " + flora.modelsLoaded() + ", scatters waiting "
+            + flora.waitingScatters() + ", resources loaded " + renderer.assets().resources().loaded();
     }
 
     public ShowcaseRenderer renderer() {
@@ -256,7 +279,10 @@ public final class ShowcaseWorld implements AutoCloseable {
             .water(riverBank(), fall());
     }
 
-    /** A point of the Weisse Luetschine near the village, the way it flows and its half width; or null. */
+    /**
+     * The Weisse Luetschine where it is widest within 1.5 km of the village (off its buildings): the point, the way it
+     * flows and its half width; or null.
+     */
     private double[] riverBank() {
         if (rivers == null) {
             return null;
@@ -279,16 +305,54 @@ public final class ShowcaseWorld implements AutoCloseable {
                 double dx = c.x(i) - ox;
                 double dz = c.z(i) - oz;
                 double d = dx * dx + dz * dz;
-                if (d < best && layout.near(c.x(i), c.z(i), 25) == null) {
+                double score = d > 1500 * 1500 ? Double.MAX_VALUE : -c.width(i) + Math.sqrt(d) / 500;
+                if (score < best && layout.near(c.x(i), c.z(i), 25) == null) {
                     double fx = c.x(i + 1) - c.x(i);
                     double fz = c.z(i + 1) - c.z(i);
                     double l = Math.max(Math.sqrt(fx * fx + fz * fz), 1e-6);
-                    best = d;
-                    out = new double[] {c.x(i), c.z(i), fx / l, fz / l, c.width(i) / 2};
+                    best = score;
+                    // the camera's way and where it looks, along the channel itself (it bends)
+                    double[] e0 = along(c, i, -8);
+                    double[] e1 = along(c, i, 8);
+                    double[] t0 = along(c, i, 4);
+                    double[] t1 = along(c, i, 16);
+                    out = new double[] {c.x(i), c.z(i), fx / l, fz / l, c.width(i) / 2, e0[0], e0[1], e1[0], e1[1],
+                        t0[0], t0[1], t1[0], t1[1]};
                 }
             }
         }
+        double widest = 0;
+        for (var c : rivers.channels()) {
+            for (int i = 0; i < c.count(); i++) {
+                widest = Math.max(widest, c.width(i));
+            }
+        }
+        if (out != null) {
+            System.out.printf(java.util.Locale.ROOT, "River close-up: %.1f m wide at (%.0f, %.0f), %.0f m from the "
+                + "village; the widest anywhere %.1f m%n", out[4] * 2, out[0] - ox, out[1] - oz,
+                Math.sqrt((out[0] - ox) * (out[0] - ox) + (out[1] - oz) * (out[1] - oz)), widest);
+        }
         return out;
+    }
+
+    /** The point {@code metres} along channel {@code c} from its point {@code i} (back where negative): x, z. */
+    private static double[] along(com.truesim.common.procedural.water.Channel c, int i, double metres) {
+        int step = metres < 0 ? -1 : 1;
+        double left = Math.abs(metres);
+        double x = c.x(i);
+        double z = c.z(i);
+        for (int j = i + step; j >= 0 && j < c.count(); j += step) {
+            double dx = c.x(j) - x;
+            double dz = c.z(j) - z;
+            double l = Math.sqrt(dx * dx + dz * dz);
+            if (l >= left) {
+                return new double[] {x + dx * left / l, z + dz * left / l};
+            }
+            left -= l;
+            x = c.x(j);
+            z = c.z(j);
+        }
+        return new double[] {x, z};
     }
 
     /** The tallest fall's foot and lip (x, y, z each); or null. */

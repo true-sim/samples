@@ -153,6 +153,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     private final double[] sunDirection = new double[3];
     private double direct = 1;
     private double moonBoost = 1;
+    private static final double NIGHT_FILL = 8; // the night sky's light over the moon's boost (art-directed)
     private double overcast = 1;
     private boolean indoors;
     private double inside; // indoors eased: 0 out, 1 in (a step would flash as the door is passed)
@@ -291,16 +292,24 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // in over half a minute (the tour's dusk is a time-lapse)
         settings.set(game, com.truesim.effects.weather.snow.SnowSettings.AREA, 160f);
         settings.set(game, com.truesim.effects.weather.snow.SnowSettings.MAP_RESOLUTION, 2048);
-        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.FILL_SECONDS, 30f);
+        settings.set(game, com.truesim.effects.weather.snow.SnowSettings.FILL_SECONDS, 2f); // the tour keys the cover
         // effects-terrain: the snow map's bias a texel's rise on steep ground; the terrain's interest moving in steps
         settings.set(game, com.truesim.effects.weather.snow.SnowSettings.BIAS, 0.5f);
         // the meadows fuller to the eye: a quarter of the blades kept at 12 m rather than 8 (a camera at head height
         // looks across them), the blades widening more as they thin
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.LOD_DISTANCE, 12f);
+        // far ranges, best quality: the grass out to 250 m (its patches and the plants' budgets to match), the
+        // terrain's pyramid refined to a pixel's error out to its range
+        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.RADIUS, 250f);
+        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PATCH_BUDGET, 4096);
+        settings.set(game, com.truesim.effects.vegetation.VegetationSettings.PLANT_BUDGET, 2048);
+        settings.set(game, com.truesim.effects.terrain.TerrainSettings.SCREEN_ERROR, 1f);
         settings.set(game, com.truesim.effects.vegetation.VegetationSettings.MAX_WIDEN, 4f);
         // the falls' mist a third as dense: at the network's own density the Staubbach's foot stood as a white
         // ellipsoid in the valley's view from above the trees
         settings.set(game, com.truesim.effects.water.WaterRenderSettings.MIST_DENSITY, 0.35f);
+        // the veils swaying little: a wide sway shows the sheet in hard horizontal steps (effects-water's pitfalls)
+        settings.set(game, com.truesim.effects.water.WaterRenderSettings.SWAY_DRIFT, 0.01f);
         // screen-space reflections on the transparent surfaces too: the river reflects the cliffs, trees and houses,
         // the windows the street (engine 0.201)
         settings.set(game, com.truesim.engine.render.ScreenSpaceReflections.TRANSPARENT, true);
@@ -317,7 +326,7 @@ public final class ShowcaseRenderer implements AutoCloseable {
     public SceneView view(ViewPort port, Camera camera) {
         // the lists start modest and grow as the terrain, the village and the forest need (engine 0.198, #464)
         SceneView view = geometry.createView(port, camera, ViewOptions.of(1 << 15, 1 << 22).withOcclusion(true))
-            .set(1, MeshletRenderer.MODE_LIT);
+            .set(1, settings.get(ShowcaseSettings.DEBUG_LOD) ? MeshletRenderer.MODE_MESHLETS : MeshletRenderer.MODE_LIT);
         boolean visibility = "visibility".equals(settings.get(ShowcaseSettings.SHADING)) && device.primitiveIds();
         if (visibility) {
             port.add(new VisibilityBufferShading(geometry, view, COLOR, DEPTH).clearColor(0, 0, 0));
@@ -413,6 +422,9 @@ public final class ShowcaseRenderer implements AutoCloseable {
         // cloud shadow mask darkens the ground under single clouds; this, the light the deck lets through at all)
         direct = Math.min(Math.clamp((ratio - 0.3) / 0.5, 0, 1), overcast);
         environment.intensity(environment.intensity() * (float) Math.max(overcast, 0.45));
+        // the moonlit night's sky light lifted with the moon's, and more: the captured night sky holds no moonlit
+        // haze, so the moon's shadows on the snow went black (the evening square); a fill about a fifth of its light
+        environment.intensity(environment.intensity() * (float) (moonBoost == 1 ? 1 : moonBoost * NIGHT_FILL));
         if (direct < 1) {
             atmosphere.lightAtCamera(0, sunLight);
             atmosphere.sunDirection(sunDirection);
@@ -451,6 +463,11 @@ public final class ShowcaseRenderer implements AutoCloseable {
      * The water's ground wetness map (effects-water's {@code WaterWetness}, closed with the renderer) for the views
      * made from now on, and the falls' sway.
      */
+    /** What the ray tracing's acceleration structures hold (a failure's report), or "no ray tracing". */
+    public String rayTracingReport() {
+        return RayTracingReport.of(rays);
+    }
+
     public void water(com.truesim.engine.vulkan.GpuBuffer wet) {
         wetness = own(wet);
         sway = new com.truesim.effects.water.WaterSway(gpu);

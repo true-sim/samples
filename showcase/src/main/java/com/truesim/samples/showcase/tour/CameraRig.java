@@ -17,12 +17,24 @@ public final class CameraRig {
     private final long node;
     private final Camera camera = new Camera();
     private final CameraSync sync;
+    private final double near;
+    private double fovY;
 
     public CameraRig(SceneGraph scene, ViewPort port, double fovY, double near) {
         this.scene = scene;
+        this.near = near;
+        this.fovY = fovY;
         node = scene.create();
         scene.components().set(node, CameraLens.TYPE, CameraLens.perspective(fovY, near));
         sync = port == null ? new CameraSync(scene, node, camera) : new CameraSync(scene, node, camera, port);
+    }
+
+    /** The lens' vertical field of view, radians (a change sets the lens anew). */
+    public void fov(double radians) {
+        if (radians != fovY) {
+            fovY = radians;
+            scene.components().set(node, CameraLens.TYPE, CameraLens.perspective(radians, near));
+        }
     }
 
     /** The renderer's camera. */

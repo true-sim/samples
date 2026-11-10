@@ -145,8 +145,9 @@ public final class DayDriver {
             weather = state.weather;
         }
         if (state.storm && !stormSpawned) {
-            // up the valley, upwind: it drifts over the village
-            renderer.weather().spawnStorm(-500, renderer.weather().domain().ground(), -900);
+            // far up the valley, upwind: it towers over the valley's head, drifting in, its lightning seen from the
+            // village (spawned nearer, it passed over the camera, its base a hard disc overhead: effects-weather#18)
+            renderer.weather().spawnStorm(-500, renderer.weather().domain().ground(), -3500);
             stormSpawned = true;
         }
         if (!state.storm) {
@@ -170,8 +171,9 @@ public final class DayDriver {
         scene.setTranslation(weatherFx, x, y + 14, z);
         snow.set(VillageEffects.RATE, (float) Math.max(state.snowfall, 1e-4) * (state.snowfall > 0 ? 1 : 0));
         rain.set(VillageEffects.RATE, (float) state.rain);
-        // the drops: lit as a white surface would be, half of it reaching the eye along each streak
-        rain.set(VillageEffects.DROPS, 0.5f, 0.52f, 0.55f, 0.6f);
+        // the drops: brighter than a white surface would be lit (a streak gathers the light along its fall), most of
+        // it reaching the eye, so the rain reads against the overcast
+        rain.set(VillageEffects.DROPS, 1.6f, 1.65f, 1.75f, 0.9f);
         // the lights and what glows, in scene units
         double units = atmosphere.sceneUnits();
         lights(village.lamps(), state.lamps * units);
@@ -200,14 +202,10 @@ public final class DayDriver {
             // the shells' smoke spreading a little faster, scattering forwards so the bursts behind light it up,
             // lingering as it drifts off in the breeze (thinner, wider puffs stood as dark blobs against the glow;
             // a change makes the shells anew: once)
-            settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 1.0f);
-            // no smoke on engine 0.203 until effects-particles is rebuilt on it: the smoke draws at half resolution,
-            // whose depth pass pushes the engine's old 40-byte record to a 32-byte pipeline (effects-particles#7)
-            settings.set(FireworksSettings.SMOKE, 0f);
-            settings.set(FireworksSettings.BURST_SMOKE, 0f);
-            settings.set(FireworksSettings.SMOKE_PHASE, 0.75f);
+            settings.set(FireworksSettings.SMOKE_DIFFUSIVITY, 0.6f);
+            settings.set(FireworksSettings.SMOKE_PHASE, 0.6f); // less forward glow: lit smoke, not balls of light
             settings.set(FireworksSettings.SMOKE_ALBEDO, 0.95f);
-            settings.set(FireworksSettings.SMOKE_TIME, 40f);
+            settings.set(FireworksSettings.SMOKE_TIME, 20f); // gone before it piles into one glowing cloud
             smokeTuned = true;
         }
         if (state.fireworks != showing) {

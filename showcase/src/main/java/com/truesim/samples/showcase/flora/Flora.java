@@ -58,15 +58,15 @@ public final class Flora implements AutoCloseable {
 
     /** The day of the year the plants are generated for: 26 September, the showcase's day. */
     public static final double DAY = 268;
-    /** Metres a side of the region the trees stand in, about the village. */
-    public static final double TREES = 2048;
-    /** Of the shrubs' and herbs'. */
-    public static final double HERBS = 512;
+    /** Metres a side of the region the trees stand in, about the village (showcase.trees). */
+    private final double TREES;
+    /** Of the shrubs' and herbs' (showcase.herbs). */
+    private final double HERBS;
     /** Variants of each species. */
     private static final int VARIANTS = 3;
-    /** Metres a side of the grass's ground map, and its texels. */
-    private static final double MAP = 768;
-    private static final int MAP_TEXELS = 1536;
+    /** Metres a side of the grass's ground map (showcase.grassMap), and its texels (two a metre). */
+    private final double MAP;
+    private final int MAP_TEXELS;
 
     private final ShowcaseRenderer renderer;
     private final VegetationSync sync;
@@ -76,8 +76,8 @@ public final class Flora implements AutoCloseable {
     private final FloraMaterials materials;
     /** effects-vegetation's impostors of the far trees and shrubs, baked on the GPU. */
     private final com.truesim.effects.vegetation.ImpostorBaker baker;
-    /** Metres round the viewer dwarf shrubs and herbs stand in. */
-    private static final double HERB_RADIUS = 70;
+    /** Metres round the viewer dwarf shrubs and herbs stand in (showcase.herbRadius). */
+    private final double HERB_RADIUS;
     private final Map<PlantScatter, List<PlantPlacement.Plant>> placements = new IdentityHashMap<>();
     private final List<AssetRef<ModelData>> models = new ArrayList<>();
     private int plants;
@@ -99,8 +99,15 @@ public final class Flora implements AutoCloseable {
      * {@code procedural}, materials named through {@code named}.
      */
     public Flora(ShowcaseRenderer renderer, Ground ground, VillageLayout layout, Ecology ecology, RockField rocks,
-        NamedMaterials named, ProceduralAssets procedural, java.util.function.DoubleBinaryOperator paths) {
+        NamedMaterials named, ProceduralAssets procedural, java.util.function.DoubleBinaryOperator paths,
+        com.truesim.common.procedural.water.WaterNetwork rivers) {
         this.renderer = renderer;
+        var settings = renderer.settings();
+        TREES = settings.get(com.truesim.samples.showcase.ShowcaseSettings.TREES);
+        HERBS = settings.get(com.truesim.samples.showcase.ShowcaseSettings.HERBS);
+        HERB_RADIUS = settings.get(com.truesim.samples.showcase.ShowcaseSettings.HERB_RADIUS);
+        MAP = settings.get(com.truesim.samples.showcase.ShowcaseSettings.GRASS_MAP);
+        MAP_TEXELS = (int) Math.round(MAP * 2);
         var assets = renderer.assets();
         this.procedural = procedural;
         materials = new FloraMaterials(assets, named, procedural);
@@ -111,8 +118,11 @@ public final class Flora implements AutoCloseable {
         var plan = layout.settlement().clearing();
         Clearing grassGround = new Clearing(ground, plan, false);
         double texel = MAP / MAP_TEXELS;
-        grassGround.rocks(rocks.footprint(ox - MAP / 2, oz - MAP / 2, texel, MAP_TEXELS, MAP_TEXELS), ox - MAP / 2,
-            oz - MAP / 2, texel, MAP_TEXELS);
+        float[] cover = rocks.footprint(ox - MAP / 2, oz - MAP / 2, texel, MAP_TEXELS, MAP_TEXELS);
+        if (rivers != null) {
+            channels(rivers, cover, ox - MAP / 2, oz - MAP / 2, texel, MAP_TEXELS); // no grass in the water
+        }
+        grassGround.rocks(cover, ox - MAP / 2, oz - MAP / 2, texel, MAP_TEXELS);
         map = GroundMap.upload(assets.resources().textures(), grassGround, ox - MAP / 2, oz - MAP / 2, MAP,
             MAP_TEXELS);
         grassGround.map(map);
@@ -259,6 +269,44 @@ public final class Flora implements AutoCloseable {
         return true;
     }
 
+    /**
+     * The rivers' channels into {@code cover} (size x size texels from (x0, z0)): 1 over the water and its edge,
+     * fading out a metre beyond.
+     */
+    private static void channels(com.truesim.common.procedural.water.WaterNetwork rivers, float[] cover, double x0,
+        double z0, double texel, int size) {
+        for (var c : rivers.channels()) {
+            for (int i = 0; i + 1 < c.count(); i++) {
+                double ax = c.x(i);
+                double az = c.z(i);
+                double bx = c.x(i + 1);
+                double bz = c.z(i + 1);
+                double half = Math.max(c.width(i), c.width(i + 1)) / 2 + 0.3;
+                double reach = half + 1;
+                int i0 = Math.max(0, (int) Math.floor((Math.min(ax, bx) - reach - x0) / texel));
+                int i1 = Math.min(size - 1, (int) Math.floor((Math.max(ax, bx) + reach - x0) / texel));
+                int j0 = Math.max(0, (int) Math.floor((Math.min(az, bz) - reach - z0) / texel));
+                int j1 = Math.min(size - 1, (int) Math.floor((Math.max(az, bz) + reach - z0) / texel));
+                double ux = bx - ax;
+                double uz = bz - az;
+                double uu = Math.max(ux * ux + uz * uz, 1e-12);
+                for (int j = j0; j <= j1; j++) {
+                    for (int k = i0; k <= i1; k++) {
+                        double px = x0 + (k + 0.5) * texel - ax;
+                        double pz = z0 + (j + 0.5) * texel - az;
+                        double s = Math.clamp((px * ux + pz * uz) / uu, 0, 1);
+                        double dx = px - ux * s;
+                        double dz = pz - uz * s;
+                        double d = Math.sqrt(dx * dx + dz * dz);
+                        float v = (float) Math.clamp(reach - d, 0, 1);
+                        int n = j * size + k;
+                        cover[n] = Math.max(cover[n], v);
+                    }
+                }
+            }
+        }
+    }
+
     /** 0 within 100 m of the square, 1 from 130 m. */
     private static double open(double dx, double dz) {
         double t = Math.clamp((Math.sqrt(dx * dx + dz * dz) - 100) / 30, 0, 1);
@@ -358,6 +406,11 @@ public final class Flora implements AutoCloseable {
     /** Whether every plant's model has loaded (or failed: the rest still stand). */
     public boolean ready() {
         return modelsLoaded() && sync.waitingScatters() == 0; // placed: impostors baked
+    }
+
+    /** Scatters still waiting (for their impostors). */
+    public int waitingScatters() {
+        return sync.waitingScatters();
     }
 
     /** Whether every plant's and rock's model has loaded (or failed). */

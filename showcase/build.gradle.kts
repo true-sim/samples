@@ -15,11 +15,16 @@ val effectsTerrainVersion = rootProject.extra["effectsTerrainVersion"] as String
 val effectsVegetationVersion = rootProject.extra["effectsVegetationVersion"] as String
 val commonProceduralVersion = rootProject.extra["commonProceduralVersion"] as String
 val effectsWaterVersion = rootProject.extra["effectsWaterVersion"] as String
+val uiVersion = rootProject.extra["uiVersion"] as String
 
 dependencies {
     implementation("com.truesim.engine:engine-scene:$engineVersion")
     implementation("com.truesim.engine:engine-input:$engineVersion") // the interactive app's actions
     implementation("com.truesim.engine:engine-platform:$engineVersion") // its window
+    implementation("com.truesim.engine:engine-ui:$engineVersion") // the profiler's views in the app
+    implementation("com.truesim.ui:ui-profiler:$uiVersion") // the measured tour's recordings and their exports
+    implementation("com.truesim.ui:ui-text-native:$uiVersion") // the profiler's text
+    implementation("com.truesim.ui:ui-fonts:$uiVersion")
     implementation("com.truesim.scene:scene-meshbuild:$sceneVersion")
     implementation("com.truesim.scene:scene-gltf:$sceneVersion")
     implementation("com.truesim.scene:scene-world:$sceneVersion")
@@ -101,7 +106,7 @@ tasks.register<JavaExec>("tour") {
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx16g")
     // the film is made without global illumination (-Pgi=probes or cascades to have it): the interactive app has it
     val settings = showcaseSettings("out", "size", "segments", "every", "pace", "stills", "quality", "gi", "shading",
-        "measure", "assets", "terrain", "procedural", "sunShadows", "skip") +
+        "measure", "assets", "terrain", "procedural", "sunShadows", "skip", "buildingNearest", "debugLod") +
         (if (providers.gradleProperty("gi").isPresent) listOf() else listOf("--set", "showcase.gi=off"))
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
@@ -112,7 +117,7 @@ tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED", "-XX:+UseZGC", "-Xmx16g")
     val settings = showcaseSettings("hour", "weather", "quality", "gi", "shading", "seconds", "assets", "terrain",
-        "procedural", "sunShadows", "skip")
+        "procedural", "sunShadows", "skip", "buildingNearest")
     argumentProviders.add(CommandLineArgumentProvider { settings })
 }
 
