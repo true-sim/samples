@@ -311,7 +311,9 @@ public final class TourScript {
         double px = x - (bank[0] - bank[3] * side);
         double pz = z - (bank[1] + bank[2] * side);
         double along = Math.clamp(px * bank[2] + pz * bank[3], RIVER[0][1] - 3, RIVER[1][1] + 3);
-        double d = Math.hypot(px - bank[2] * along, pz - bank[3] * along);
+        double qx = px - bank[2] * along;
+        double qz = pz - bank[3] * along;
+        double d = Math.sqrt(qx * qx + qz * qz);
         return Math.clamp(d - 3, 0, 1);
     }
 
